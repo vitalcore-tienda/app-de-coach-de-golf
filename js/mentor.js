@@ -1,0 +1,400 @@
+/**
+ * GolfCoach Pro - Mentorship, Goals & Coach Journal Engine
+ * Interactive Coach AI Chat, SMART goals manager, training journal
+ */
+
+const COACH_KNOWLEDGE_BASE = [
+  {
+    triggers: ['slice', 'driver', 'derecha', 'desviado'],
+    response: `El slice suele ser provocado por dos factores combinados: un camino de swing "Over the top" (de afuera hacia adentro) y una cara del palo abierta en el impacto. 
+
+💡 **3 Correcciones Clave del Coach:**
+1. **Grip**: Asegúrate de ver 2 a 3 nudillos de tu mano izquierda al colocarte en el stance (evita el grip débil).
+2. **Cuerpo cerrado en el set-up**: Alinea tus hombros levemente paralelos o apuntando a la derecha del objetivo.
+3. **Drill de la Varilla**: Practica con una varilla clavada detrás de ti para forzar a que las manos bajen por el interior (in-to-out).`
+  },
+  {
+    triggers: ['putt', 'tripateo', 'tres putts', 'green', 'distancia'],
+    response: `El 80% de los tripateos en golf amateur no se deben a una mala lectura de línea, sino a una deficiente **gestión de la velocidad** en el primer putt largo.
+
+💡 **Recomendación para el Putting:**
+1. **Control de Distancia**: En el putting green, haz el *Ladder Drill* (de 5 a 12 metros). El objetivo es que la bola nunca quede a más de 50 cm del hoyo.
+2. **Stroke con los hombros**: Bloquea las muñecas; el movimiento debe ser un péndulo puro generado por el triángulo hombros-pecho.
+3. **No levantes la vista antes de tiempo**: Escucha la bola caer antes de mirar el hoyo.`
+  },
+  {
+    triggers: ['mente', 'mental', 'nervios', 'presión', 'frustración', 'primer tee', 'miedo'],
+    response: `Como decía el legendario Bobby Jones, *"El golf es un juego que se juega en un campo de 12 centímetros: el espacio entre tus orejas"*.
+
+💡 **Estrategia Mental SotaPar:**
+1. **Rutina Pre-Golpe Invariable**: Tu rutina es tu ancla de seguridad bajo presión. Respira hondo antes de cuadrar la cara del palo.
+2. **La Regla de los 10 Pasos**: Tienes 10 pasos tras un mal golpe para desahogarte. Al paso 11, ese tiro ya no existe.
+3. **Prueba el Box Breathing**: Inhala 4s, retén 4s, exhala 4s. Esto normaliza tus pulsaciones inmediatamente.`
+  },
+  {
+    triggers: ['bunker', 'arena', 'sacada', 'enterrada'],
+    response: `El bunker no requiere fuerza, sino **comprender el uso del bounce** de la suela de tu Sand Wedge.
+
+💡 **Claves para la Arena:**
+1. **Abre la cara ANTES de coger el grip**, no después.
+2. **Entrada en la arena**: El palo debe golpear la arena unos 3-4 cm antes de la bola; es la capa de arena la que expulsa la bola suavemente.
+3. **No desaceleres en el impacto**: Mantén la aceleración hasta un finish completo y alto.`
+  },
+  {
+    triggers: ['bajar handicap', 'hándicap', '100', '90', '80', 'mejorar'],
+    response: `Para bajar de 90 golpes no necesitas pegar drives de 280 metros, necesitas **eliminar los errores graves** (dobles bogeys o pérdidas de bola).
+
+💡 **Plan de Acción para Bajar Hándicap:**
+1. **Asegura la salida**: Si el driver tiene riesgo de out of bounds, juega madera o híbrido al centro.
+2. **Juego corto (50% de tu práctica)**: Dedica la mitad de tus sesiones al chip y putt dentro de 2 metros.
+3. **Apunta al centro del green**: Deja de atacar banderas comprometidas y garantiza dos putts para par o bogey fácil.`
+  },
+  {
+    triggers: ['pomodoro', 'entrenamiento', 'practicar', 'tiempo', 'drill'],
+    response: `En SotaPar recomendamos la **Técnica Pomodoro aplicada al Golf**:
+- 20 minutos de concentración absoluta en un solo drill específico con rutina pre-golpe en cada bola.
+- 5 minutos de pausa para hidratarte y analizar sensaciones.
+- 2 o 3 bloques de 20 minutos bien enfocados son 10 veces más efectivos que tirar 2 cubos de 100 bolas sin parar.`
+  }
+];
+
+class MentorEngine {
+  static renderMentorView() {
+    const container = document.getElementById('mentor-container');
+    if (!container) return;
+
+    const chatHistory = StorageManager.getChatHistory();
+    const goals = StorageManager.getGoals();
+    const notes = StorageManager.getNotes();
+
+    container.innerHTML = `
+      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
+          <div>
+            <h2>Centro de Mentoría & Metas</h2>
+            <p>Consejos expertos basados en la metodología de SotaPar, seguimiento de metas SMART y diario de sensaciones.</p>
+          </div>
+          <div style="display: flex; gap: 0.75rem;">
+            <button class="btn btn-primary" onclick="MentorEngine.openNewGoalModal()">
+              🎯 Añadir Nueva Meta
+            </button>
+            <button class="btn btn-secondary" onclick="MentorEngine.openNewNoteModal()">
+              📝 Escribir Nota de Sensaciones
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 2rem;">
+        <!-- Coach AI Chat Container -->
+        <div class="chat-container">
+          <div class="chat-header">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div class="player-avatar" style="width: 36px; height: 36px; font-size: 0.9rem;">⛳</div>
+              <div>
+                <h4 style="font-size: 0.95rem;">Coach Virtual de Golf</h4>
+                <p style="font-size: 0.75rem; color: var(--color-success);">● En línea • Metodología SotaPar</p>
+              </div>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="MentorEngine.clearChat()">Limpiar Chat</button>
+          </div>
+
+          <div class="chat-messages" id="chat-messages-box">
+            ${chatHistory.map(m => `
+              <div class="chat-bubble ${m.sender}">
+                ${m.text.replace(/\n/g, '<br>')}
+                <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 0.35rem; text-align: right;">${m.time || ''}</div>
+              </div>
+            `).join('')}
+          </div>
+
+          <!-- Quick prompts -->
+          <div style="padding: 0.5rem 1rem; background: var(--bg-surface-elevated); border-top: 1px solid var(--border-subtle); display: flex; gap: 0.4rem; overflow-x: auto;">
+            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo corregir el slice con el driver?')">🏌️ Corregir Slice</button>
+            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo evitar los tripateos?')">⛳ Eliminar Tripateos</button>
+            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo controlar los nervios en el tee del 1?')">🧘 Manejo de Nervios</button>
+            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo bajar mi hándicap?')">📈 Bajar Hándicap</button>
+          </div>
+
+          <div class="chat-input-bar">
+            <input type="text" class="form-control" id="chat-input-field" placeholder="Pregunta al Coach sobre swing, mente, putts..." onkeypress="if(event.key==='Enter') MentorEngine.sendMessage()">
+            <button class="btn btn-primary" onclick="MentorEngine.sendMessage()">Enviar</button>
+          </div>
+        </div>
+
+        <!-- Goals & Notes Column -->
+        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+          <!-- SMART Goals Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon">🎯</div>
+                <h3 class="card-title">Metas de Rendimiento (SMART)</h3>
+              </div>
+              <span class="badge badge-gold">${goals.length} Activas</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 1rem;">
+              ${goals.map(g => `
+                <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                    <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${g.title}</span>
+                    <span class="badge badge-green">${g.progress}%</span>
+                  </div>
+                  <div class="progress-bar-container" style="margin-bottom: 0.4rem;">
+                    <div class="progress-bar-fill" style="width: ${g.progress}%;"></div>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-subtle);">
+                    <span>Categoría: ${g.category}</span>
+                    <span>Fecha límite: ${g.targetDate}</span>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Notes Journal Card -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon">📖</div>
+                <h3 class="card-title">Diario de Sensaciones & Lecciones</h3>
+              </div>
+              <span class="badge badge-green">${notes.length} Entradas</span>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.85rem; max-height: 220px; overflow-y: auto;">
+              ${notes.map(n => `
+                <div style="background: var(--bg-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-md); border-left: 3px solid var(--gold-400);">
+                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                    <h5 style="color: var(--text-main); font-size: 0.9rem;">${n.title}</h5>
+                    <span style="font-size: 0.72rem; color: var(--text-subtle);">${n.date}</span>
+                  </div>
+                  <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">${n.content}</p>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    MentorEngine.scrollChatToBottom();
+  }
+
+  static sendMessage() {
+    const input = document.getElementById('chat-input-field');
+    if (!input || !input.value.trim()) return;
+
+    const userText = input.value.trim();
+    input.value = '';
+
+    const history = StorageManager.getChatHistory();
+    const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    // Push user message
+    history.push({
+      sender: 'user',
+      text: userText,
+      time: timeNow
+    });
+
+    StorageManager.saveChatHistory(history);
+    MentorEngine.renderChatMessagesOnly();
+
+    // Generate intelligent response based on keywords
+    setTimeout(() => {
+      const lower = userText.toLowerCase();
+      let reply = `Excelente punto. En el golf, cada dificultad es una oportunidad para afianzar tu rutina y comprensión del movimiento. Te recomiendo trabajar este aspecto en bloques de 20 minutos con el temporizador Pomodoro y anotar tus sensaciones en tu diario.`;
+
+      for (const item of COACH_KNOWLEDGE_BASE) {
+        if (item.triggers.some(t => lower.includes(t))) {
+          reply = item.response;
+          break;
+        }
+      }
+
+      history.push({
+        sender: 'coach',
+        text: reply,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+
+      StorageManager.saveChatHistory(history);
+      MentorEngine.renderChatMessagesOnly();
+    }, 600);
+  }
+
+  static sendQuickPrompt(promptText) {
+    const input = document.getElementById('chat-input-field');
+    if (input) {
+      input.value = promptText;
+      MentorEngine.sendMessage();
+    }
+  }
+
+  static renderChatMessagesOnly() {
+    const box = document.getElementById('chat-messages-box');
+    if (!box) return;
+
+    const history = StorageManager.getChatHistory();
+    box.innerHTML = history.map(m => `
+      <div class="chat-bubble ${m.sender}">
+        ${m.text.replace(/\n/g, '<br>')}
+        <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 0.35rem; text-align: right;">${m.time || ''}</div>
+      </div>
+    `).join('');
+
+    MentorEngine.scrollChatToBottom();
+  }
+
+  static scrollChatToBottom() {
+    const box = document.getElementById('chat-messages-box');
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  static clearChat() {
+    const defaultChat = [
+      {
+        sender: 'coach',
+        text: 'Historial reiniciado. Estoy listo para ayudarte con cualquier consulta de tu juego.',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+    StorageManager.saveChatHistory(defaultChat);
+    MentorEngine.renderChatMessagesOnly();
+  }
+
+  static openNewGoalModal() {
+    const modal = document.getElementById('global-modal');
+    const modalContent = document.getElementById('global-modal-content');
+    if (!modal || !modalContent) return;
+
+    modalContent.innerHTML = `
+      <div class="modal-header">
+        <div>
+          <span class="badge badge-gold" style="margin-bottom: 0.35rem;">Planificación Deportiva</span>
+          <h3>Nueva Meta de Golf (SMART)</h3>
+        </div>
+        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Título del Objetivo</label>
+        <input type="text" class="form-control" id="goal-title-input" placeholder="ej. Bajar a 14 de hándicap o embocar 90% de putts a 1 metro">
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Categoría</label>
+          <select class="form-control" id="goal-cat-select">
+            <option value="Handicap">Hándicap</option>
+            <option value="Juego Corto">Juego Corto</option>
+            <option value="Swing & Drive">Swing & Drive</option>
+            <option value="Juego Mental">Juego Mental</option>
+            <option value="Físico">Físico & Movilidad</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha Objetivo</label>
+          <input type="date" class="form-control" id="goal-date-input" value="${new Date().toISOString().split('T')[0]}">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Progreso Inicial (%)</label>
+        <input type="number" class="form-control" id="goal-progress-input" value="20" min="0" max="100">
+      </div>
+
+      <div style="margin-top: 1.5rem; text-align: right;">
+        <button class="btn btn-primary" onclick="MentorEngine.saveNewGoal()">Guardar Meta</button>
+      </div>
+    `;
+
+    App.openModal();
+  }
+
+  static saveNewGoal() {
+    const title = document.getElementById('goal-title-input')?.value || '';
+    const category = document.getElementById('goal-cat-select')?.value || 'Handicap';
+    const targetDate = document.getElementById('goal-date-input')?.value || '';
+    const progress = parseInt(document.getElementById('goal-progress-input')?.value || 0);
+
+    if (!title.trim()) {
+      App.showToast('Por favor escribe el título de la meta.');
+      return;
+    }
+
+    const goals = StorageManager.getGoals();
+    goals.push({
+      id: 'g_' + Date.now(),
+      title,
+      category,
+      targetDate,
+      progress
+    });
+
+    StorageManager.saveGoals(goals);
+    App.closeModal();
+    App.showToast('🎯 Meta guardada en tu plan de temporada.');
+    MentorEngine.renderMentorView();
+  }
+
+  static openNewNoteModal() {
+    const modal = document.getElementById('global-modal');
+    const modalContent = document.getElementById('global-modal-content');
+    if (!modal || !modalContent) return;
+
+    modalContent.innerHTML = `
+      <div class="modal-header">
+        <div>
+          <span class="badge badge-gold" style="margin-bottom: 0.35rem;">Diario del Jugador</span>
+          <h3>Nueva Nota de Sensaciones</h3>
+        </div>
+        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Título / Clave del Día</label>
+        <input type="text" class="form-control" id="note-title-input" placeholder="ej. Sensación de soltar las manos en el finish">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Detalle de la Sensación o Aprendizaje</label>
+        <textarea class="form-control" id="note-content-input" rows="4" placeholder="¿Qué sentiste en el impacto? ¿Qué pensamiento te ayudó a mantener la calma?"></textarea>
+      </div>
+
+      <div style="margin-top: 1.5rem; text-align: right;">
+        <button class="btn btn-primary" onclick="MentorEngine.saveNewNote()">Guardar en el Diario</button>
+      </div>
+    `;
+
+    App.openModal();
+  }
+
+  static saveNewNote() {
+    const title = document.getElementById('note-title-input')?.value || '';
+    const content = document.getElementById('note-content-input')?.value || '';
+
+    if (!title.trim() || !content.trim()) {
+      App.showToast('Por favor completa el título y el contenido.');
+      return;
+    }
+
+    const notes = StorageManager.getNotes();
+    notes.unshift({
+      id: 'n_' + Date.now(),
+      date: new Date().toISOString().split('T')[0],
+      title,
+      content,
+      category: 'General'
+    });
+
+    StorageManager.saveNotes(notes);
+    App.closeModal();
+    App.showToast('📝 Entrada guardada en tu diario de sensaciones.');
+    MentorEngine.renderMentorView();
+  }
+}
+
+window.MentorEngine = MentorEngine;

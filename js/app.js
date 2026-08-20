@@ -1,0 +1,401 @@
+/**
+ * GolfCoach Pro - Core Application Orchestrator
+ * Navigation, Mobile Bottom Bar, Themes, Modals, Toasts, Dashboard Rendering
+ */
+
+class App {
+  static currentView = 'dashboard';
+  static currentTheme = 'dark';
+
+  static init() {
+    // 1. Setup Theme
+    App.currentTheme = StorageManager.get(STORAGE_KEYS.THEME, 'dark');
+    document.documentElement.setAttribute('data-theme', App.currentTheme);
+    App.updateThemeIcon();
+
+    // 2. Setup Desktop Sidebar Navigation
+    document.querySelectorAll('.sidebar .nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        const targetView = item.getAttribute('data-view');
+        if (targetView) {
+          App.navigateTo(targetView);
+        }
+      });
+    });
+
+    // 3. Render Initial Dashboard View & Player Profile
+    App.updateProfileDisplay();
+    App.renderDashboard();
+  }
+
+  static navigateTo(viewId) {
+    App.currentView = viewId;
+
+    // 1. Update Desktop Sidebar Active Class
+    document.querySelectorAll('.sidebar .nav-item').forEach(item => {
+      if (item.getAttribute('data-view') === viewId) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+
+    // 2. Update Mobile Bottom Nav Active Class
+    document.querySelectorAll('.bottom-nav-item').forEach(item => {
+      if (item.getAttribute('data-view') === viewId) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+
+    // 3. Update View Panels
+    document.querySelectorAll('.view-panel').forEach(panel => {
+      panel.classList.remove('active');
+    });
+
+    const activePanel = document.getElementById(`${viewId}-panel`);
+    if (activePanel) {
+      activePanel.classList.add('active');
+    }
+
+    // 4. Update Topbar Title
+    const titles = {
+      dashboard: 'Dashboard 360°',
+      assessment: 'Diagnóstico Integral 360°',
+      drills: 'Planes de Entrenamiento & Drills',
+      mental: 'Juego Mental & Rutina',
+      tactics: 'Caddy Táctico & Estrategia',
+      rounds: 'Scorecard & Estadísticas',
+      mentor: 'Centro de Mentoría & Metas'
+    };
+
+    const titleEl = document.getElementById('current-page-title');
+    if (titleEl) {
+      titleEl.innerText = titles[viewId] || 'GolfCoach Pro';
+    }
+
+    // 5. Trigger Module Renderers
+    if (viewId === 'dashboard') App.renderDashboard();
+    if (viewId === 'assessment' && window.AssessmentEngine) AssessmentEngine.renderDiagnosticView();
+    if (viewId === 'drills' && window.DrillsEngine) DrillsEngine.renderDrillsView();
+    if (viewId === 'mental' && window.MentalEngine) MentalEngine.renderMentalView();
+    if (viewId === 'tactics' && window.TacticsEngine) TacticsEngine.renderTacticsView();
+    if (viewId === 'rounds' && window.RoundsEngine) RoundsEngine.renderRoundsView();
+    if (viewId === 'mentor' && window.MentorEngine) MentorEngine.renderMentorView();
+
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  static toggleMobileDrawer() {
+    const drawer = document.getElementById('mobile-drawer-overlay');
+    if (drawer) {
+      drawer.classList.toggle('active');
+    }
+  }
+
+  static closeMobileDrawer(event) {
+    if (event && event.target && event.target.id !== 'mobile-drawer-overlay') {
+      return;
+    }
+    const drawer = document.getElementById('mobile-drawer-overlay');
+    if (drawer) {
+      drawer.classList.remove('active');
+    }
+  }
+
+  static renderDashboard() {
+    const container = document.getElementById('dashboard-container');
+    if (!container) return;
+
+    const profile = StorageManager.getProfile();
+    const assessment = StorageManager.getAssessment();
+    const rounds = StorageManager.getRounds();
+    const goals = StorageManager.getGoals();
+
+    const lastRound = rounds[0] || null;
+    const avgScore = rounds.length > 0 ? Math.round(rounds.reduce((a, r) => a + r.totalScore, 0) / rounds.length) : '-';
+
+    container.innerHTML = `
+      <!-- Welcome Hero Banner -->
+      <div class="card card-gold-glow" style="margin-bottom: 1.5rem; background: radial-gradient(circle at 10% 20%, rgba(24, 92, 59, 0.4) 0%, rgba(18, 25, 21, 0.95) 80%);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+              <span class="badge badge-gold">Metodología 360° SotaPar</span>
+              <span class="badge badge-green">En Entrenamiento</span>
+            </div>
+            <h2>Bienvenido, ${profile.name}</h2>
+            <p style="font-size: 0.88rem; max-width: 600px;">
+              Tu camino para bajar de hándicap dominando técnica, juego corto, estrategia de torneo y fortaleza mental.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; width: 100%; flex-wrap: wrap;">
+            <button class="btn btn-primary btn-sm" style="flex: 1; min-height: 42px;" onclick="AssessmentEngine.startQuiz()">
+              📋 Diagnóstico 360°
+            </button>
+            <button class="btn btn-secondary btn-sm" style="flex: 1; min-height: 42px;" onclick="RoundsEngine.openNewRoundModal()">
+              ➕ Registrar Ronda
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Grid -->
+      <div class="grid-4" style="margin-bottom: 1.5rem;">
+        <div class="card stat-card">
+          <div class="stat-label">Hándicap Actual</div>
+          <div class="stat-value" style="color: var(--gold-400);">${profile.handicap}</div>
+          <div class="stat-sub gold">🎯 Meta: ${profile.targetHandicap}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-label">Promedio de Score</div>
+          <div class="stat-value">${avgScore}</div>
+          <div class="stat-sub positive">⛳ ${rounds.length} rondas</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-label">Última Ronda</div>
+          <div class="stat-value" style="font-size: 1.4rem;">${lastRound ? `${lastRound.totalScore} (${lastRound.scoreDiff})` : '-'}</div>
+          <div class="stat-sub" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${lastRound ? lastRound.course : 'Sin rondas'}</div>
+        </div>
+
+        <div class="card stat-card">
+          <div class="stat-label">Perfil de Jugador</div>
+          <div class="stat-value" style="font-size: 1rem; line-height: 1.3; color: var(--primary-300);">
+            ${profile.playerCategory}
+          </div>
+          <div class="stat-sub gold">🏌️ Club: ${profile.homeClub}</div>
+        </div>
+      </div>
+
+      <!-- Main Dashboard Grid -->
+      <div class="grid-2" style="margin-bottom: 1.5rem;">
+        <!-- Radar Chart Widget -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title-group">
+              <div class="card-icon">📊</div>
+              <h3 class="card-title">Balance de los 5 Pilares</h3>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="App.navigateTo('assessment')">Detalles</button>
+          </div>
+          <div class="radar-container">
+            ${AssessmentEngine.generateRadarSVG(assessment.scores)}
+          </div>
+          <div style="display: flex; justify-content: space-around; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem; margin-top: 0.5rem;">
+            <div>
+              <span style="font-size: 0.72rem; color: var(--text-subtle);">Swing</span>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.swing}%</div>
+            </div>
+            <div>
+              <span style="font-size: 0.72rem; color: var(--text-subtle);">Corto</span>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.shortGame}%</div>
+            </div>
+            <div>
+              <span style="font-size: 0.72rem; color: var(--text-subtle);">Estrategia</span>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.strategy}%</div>
+            </div>
+            <div>
+              <span style="font-size: 0.72rem; color: var(--text-subtle);">Mente</span>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.mental}%</div>
+            </div>
+            <div>
+              <span style="font-size: 0.72rem; color: var(--text-subtle);">Físico</span>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.fitness}%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommended Daily Drill & Quick Actions -->
+        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+          <!-- Drill of the Day -->
+          <div class="card" style="border-left: 4px solid var(--gold-400);">
+            <div class="card-header">
+              <span class="badge badge-gold">Drill Recomendado</span>
+              <span class="badge badge-blue">⏱️ 20 min</span>
+            </div>
+            <h3 style="margin-bottom: 0.4rem; font-size: 1.05rem;">Drill del Reloj / Estrella a 1 Metro</h3>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+              Enfocado en eliminar tripateos y construir confianza inquebrantable bajo presión.
+            </p>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button class="btn btn-primary btn-sm" style="flex: 1;" onclick="DrillsEngine.startDrillWithTimer('d_putt_2', 20)">
+                ▶ Pomodoro (20m)
+              </button>
+              <button class="btn btn-secondary btn-sm" onclick="App.navigateTo('drills')">
+                Ver Todos
+              </button>
+            </div>
+          </div>
+
+          <!-- Active Goals Summary -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title-group">
+                <div class="card-icon">🎯</div>
+                <h3 class="card-title">Metas Activas</h3>
+              </div>
+              <button class="btn btn-secondary btn-sm" onclick="App.navigateTo('mentor')">Ver</button>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+              ${goals.slice(0, 2).map(g => `
+                <div>
+                  <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
+                    <span style="font-weight: 600;">${g.title}</span>
+                    <span style="color: var(--gold-400); font-weight: 700;">${g.progress}%</span>
+                  </div>
+                  <div class="progress-bar-container">
+                    <div class="progress-bar-fill" style="width: ${g.progress}%;"></div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  static toggleTheme() {
+    App.currentTheme = App.currentTheme === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', App.currentTheme);
+    StorageManager.set(STORAGE_KEYS.THEME, App.currentTheme);
+    App.updateThemeIcon();
+  }
+
+  static updateThemeIcon() {
+    const btn = document.getElementById('theme-toggle-btn');
+    if (btn) {
+      btn.innerHTML = App.currentTheme === 'dark' ? '☀️' : '🌙';
+    }
+  }
+
+  static updateProfileDisplay() {
+    const profile = StorageManager.getProfile();
+    
+    // Sidebar elements
+    const nameEl = document.getElementById('sidebar-player-name');
+    const hcpEl = document.getElementById('sidebar-player-hcp');
+    const avatarEl = document.getElementById('sidebar-player-avatar');
+
+    if (nameEl) nameEl.innerText = profile.name;
+    if (hcpEl) hcpEl.innerText = `HCP: ${profile.handicap} (Meta: ${profile.targetHandicap})`;
+    if (avatarEl) avatarEl.innerText = profile.name.charAt(0).toUpperCase();
+
+    // Drawer elements
+    const dNameEl = document.getElementById('drawer-player-name');
+    const dHcpEl = document.getElementById('drawer-player-hcp');
+    const dAvatarEl = document.getElementById('drawer-player-avatar');
+
+    if (dNameEl) dNameEl.innerText = profile.name;
+    if (dHcpEl) dHcpEl.innerText = `HCP: ${profile.handicap} • Editar ⚙️`;
+    if (dAvatarEl) dAvatarEl.innerText = profile.name.charAt(0).toUpperCase();
+  }
+
+  static openProfileModal() {
+    const profile = StorageManager.getProfile();
+    const modal = document.getElementById('global-modal');
+    const modalContent = document.getElementById('global-modal-content');
+    if (!modal || !modalContent) return;
+
+    modalContent.innerHTML = `
+      <div class="modal-handle-bar"></div>
+      <div class="modal-header">
+        <div>
+          <span class="badge badge-gold" style="margin-bottom: 0.25rem;">Configuración de Jugador</span>
+          <h3>Perfil del Golfista</h3>
+        </div>
+        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Nombre Completo</label>
+        <input type="text" class="form-control" id="profile-name-input" value="${profile.name}">
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Hándicap Actual</label>
+          <input type="number" step="0.1" class="form-control" id="profile-hcp-input" value="${profile.handicap}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Hándicap Objetivo</label>
+          <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${profile.targetHandicap}">
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Club Principal</label>
+          <input type="text" class="form-control" id="profile-club-input" value="${profile.homeClub}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Carry Driver (m)</label>
+          <input type="number" class="form-control" id="profile-driver-input" value="${profile.driverDistanceAvg}">
+        </div>
+      </div>
+
+      <div style="margin-top: 1.25rem;">
+        <button class="btn btn-primary" style="width: 100%; min-height: 48px;" onclick="App.saveProfile()">Guardar Cambios</button>
+      </div>
+    `;
+
+    App.openModal();
+  }
+
+  static saveProfile() {
+    const profile = StorageManager.getProfile();
+    profile.name = document.getElementById('profile-name-input')?.value || profile.name;
+    profile.handicap = parseFloat(document.getElementById('profile-hcp-input')?.value || profile.handicap);
+    profile.targetHandicap = parseFloat(document.getElementById('profile-target-hcp-input')?.value || profile.targetHandicap);
+    profile.homeClub = document.getElementById('profile-club-input')?.value || profile.homeClub;
+    profile.driverDistanceAvg = parseInt(document.getElementById('profile-driver-input')?.value || profile.driverDistanceAvg);
+
+    StorageManager.saveProfile(profile);
+    App.updateProfileDisplay();
+    App.closeModal();
+    App.showToast('✅ Perfil actualizado.');
+    App.renderDashboard();
+  }
+
+  static openModal() {
+    const modal = document.getElementById('global-modal');
+    if (modal) modal.classList.add('active');
+  }
+
+  static closeModal() {
+    const modal = document.getElementById('global-modal');
+    if (modal) modal.classList.remove('active');
+  }
+
+  static showToast(message) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.className = 'toast-container';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'toast';
+    toast.innerHTML = `<span>⛳</span> <div>${message}</div>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(15px)';
+      toast.style.transition = 'all 0.25s ease';
+      setTimeout(() => toast.remove(), 250);
+    }, 2800);
+  }
+}
+
+window.App = App;
+
+document.addEventListener('DOMContentLoaded', () => {
+  App.init();
+});
