@@ -91,12 +91,14 @@ class RoundsEngine {
               <tr>
                 <th>Fecha</th>
                 <th>Campo</th>
+                <th>Tipo</th>
                 <th>Hoyos</th>
                 <th>Golpes</th>
                 <th>vs Par</th>
                 <th>FIR %</th>
                 <th>GIR %</th>
                 <th>Putts</th>
+                <th>Detalle</th>
               </tr>
             </thead>
             <tbody>
@@ -107,12 +109,14 @@ class RoundsEngine {
                   <tr>
                     <td>${r.date}</td>
                     <td style="font-weight: 600; text-align: left; padding-left: 0.5rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${r.course}</td>
+                    <td><span class="badge ${r.kind === 'Torneo' ? 'badge-gold' : 'badge-blue'}">${r.kind || 'Práctica'}</span></td>
                     <td>${r.holesCount}H</td>
                     <td style="font-weight: 800; font-size: 1rem; color: var(--gold-400);">${r.totalScore}</td>
                     <td><span class="score-chip ${parseInt(r.scoreDiff) <= 0 ? 'birdie' : 'bogey'}">${r.scoreDiff}</span></td>
                     <td>${firPct}%</td>
                     <td>${girPct}%</td>
                     <td style="font-weight: 700;">${r.totalPutts}</td>
+                    <td><button class="btn btn-secondary btn-sm" onclick="RoundsEngine.openRoundDetailsModal('${r.id}')">${r.holes?.length ? 'Ver' : 'Sin datos'}</button></td>
                   </tr>
                 `;
               }).join('')}
@@ -210,11 +214,18 @@ class RoundsEngine {
     `;
   }
 
-  static openNewRoundModal() {
+  static async openNewRoundModal() {
     RoundsEngine.initHoleData(18);
     const modal = document.getElementById('global-modal');
     const modalContent = document.getElementById('global-modal-content');
     if (!modal || !modalContent) return;
+
+    let tournaments = [];
+    try {
+      tournaments = await StorageManager.getTournaments();
+    } catch (error) {
+      console.warn('No se pudieron cargar los torneos para la ronda:', error);
+    }
 
     modalContent.innerHTML = `
       <div class="modal-handle-bar"></div>
@@ -240,6 +251,24 @@ class RoundsEngine {
           <select class="form-control" id="round-holes-select" onchange="RoundsEngine.changeHolesCount(this.value)">
             <option value="18" selected>18 Hoyos</option>
             <option value="9">9 Hoyos</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-bottom: 1rem;">
+        <div class="form-group" style="margin-bottom: 0.5rem;">
+          <label class="form-label">Tipo de ronda</label>
+          <select class="form-control" id="round-kind-select">
+            <option value="Práctica">Práctica</option>
+            <option value="Amistosa">Amistosa</option>
+            <option value="Torneo">Torneo</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-bottom: 0.5rem;">
+          <label class="form-label">Torneo vinculado</label>
+          <select class="form-control" id="round-tournament-select">
+            <option value="">Sin vincular</option>
+            ${tournaments.map((tournament) => `<option value="${RoundsEngine.escapeHTML(tournament.id)}">${RoundsEngine.escapeHTML(tournament.name)} · ${RoundsEngine.escapeHTML(tournament.startDate)}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -316,7 +345,7 @@ class RoundsEngine {
           </div>
         </div>
 
-        <div class="grid-2" style="margin-bottom: 1rem;">
+        <div class="grid-3" style="margin-bottom: 1rem;">
           <!-- Strokes Stepper -->
           <div>
             <label class="form-label" style="text-align: center;">Golpes Totales</label>
@@ -334,6 +363,16 @@ class RoundsEngine {
               <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', -1)">−</button>
               <span class="stepper-value" id="stepper-putts-${idx}">${h.putts}</span>
               <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', 1)">+</button>
+            </div>
+          </div>
+
+          <!-- Penalty Strokes Stepper -->
+          <div>
+            <label class="form-label" style="text-align: center;">Penalidades</label>
+            <div class="stepper-control">
+              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', -1)">−</button>
+              <span class="stepper-value" id="stepper-penalty-${idx}">${h.penalty || 0}</span>
+              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', 1)">+</button>
             </div>
           </div>
         </div>
@@ -417,10 +456,68 @@ class RoundsEngine {
     }
   }
 
-  static saveNewRound() {
+  static escapeHTML(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  static openRoundDetailsModal(roundId) {
+    const round = StorageManager.getRounds().find((item) => item.id === roundId);
+    const modalContent = document.getElementById('global-modal-content');
+    if (!round || !modalContent) return;
+
+    const holes = Array.isArray(round.holes) ? round.holes.slice().sort((a, b) => a.hole - b.hole) : [];
+    modalContent.innerHTML = `
+      <div class="modal-handle-bar"></div>
+      <div class="modal-header">
+        <div>
+          <span class="badge ${round.kind === 'Torneo' ? 'badge-gold' : 'badge-blue'}">${RoundsEngine.escapeHTML(round.kind || 'Práctica')}</span>
+          <h3 style="margin-top:0.3rem;">${RoundsEngine.escapeHTML(round.course)} · ${RoundsEngine.escapeHTML(round.date)}</h3>
+        </div>
+        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+      </div>
+      <div class="grid-4" style="margin-bottom:1rem;">
+        <div class="card stat-card"><div class="stat-label">Golpes</div><div class="stat-value">${round.totalScore}</div></div>
+        <div class="card stat-card"><div class="stat-label">vs Par</div><div class="stat-value">${RoundsEngine.escapeHTML(round.scoreDiff)}</div></div>
+        <div class="card stat-card"><div class="stat-label">Putts</div><div class="stat-value">${round.totalPutts}</div></div>
+        <div class="card stat-card"><div class="stat-label">Penalidades</div><div class="stat-value">${round.penalties || 0}</div></div>
+      </div>
+      ${holes.length ? `
+        <div class="scorecard-table-wrapper">
+          <table class="scorecard-table">
+            <thead><tr><th>Hoyo</th><th>Par</th><th>Golpes</th><th>vs Par</th><th>Putts</th><th>FIR</th><th>GIR</th><th>Bunker</th><th>Pen.</th></tr></thead>
+            <tbody>
+              ${holes.map((hole) => {
+                const diff = Number(hole.strokes || 0) - Number(hole.par || 0);
+                const diffText = diff > 0 ? `+${diff}` : (diff === 0 ? 'E' : `${diff}`);
+                return `<tr>
+                  <td>${hole.hole}</td><td>${hole.par}</td><td style="font-weight:700;">${hole.strokes}</td>
+                  <td>${diffText}</td><td>${hole.putts ?? 0}</td>
+                  <td>${hole.par > 3 ? (hole.fir ? '✓' : '—') : 'N/A'}</td>
+                  <td>${hole.gir ? '✓' : '—'}</td><td>${hole.bunker ? '✓' : '—'}</td><td>${hole.penalty || 0}</td>
+                </tr>`;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : '<p style="color:var(--text-muted); font-size:0.9rem;">Esta es una ronda histórica importada sin detalle por hoyo. Las nuevas rondas sí guardan cada golpe, putt y penalidad por hoyo.</p>'}
+      ${round.notes ? `<div style="margin-top:1rem; font-size:0.88rem; color:var(--text-muted);"><strong style="color:var(--text-main);">Notas:</strong> ${RoundsEngine.escapeHTML(round.notes)}</div>` : ''}
+    `;
+    App.openModal();
+  }
+
+  static async saveNewRound() {
     const course = document.getElementById('round-course-input')?.value || 'Club de Golf';
     const date = document.getElementById('round-date-input')?.value || new Date().toISOString().split('T')[0];
     const notes = document.getElementById('round-notes-input')?.value || '';
+    const tournamentId = document.getElementById('round-tournament-select')?.value || null;
+    const kind = tournamentId
+      ? 'Torneo'
+      : (document.getElementById('round-kind-select')?.value || 'Práctica');
 
     let totalScore = 0;
     let totalPar = 0;
@@ -453,12 +550,15 @@ class RoundsEngine {
     const diffStr = diff > 0 ? `+${diff}` : (diff === 0 ? 'E' : `${diff}`);
 
     const newRound = {
-      id: 'r_' + Date.now(),
+      id: StorageManager.makeId('round'),
       date,
       course,
+      kind,
+      tournamentId,
       holesCount: RoundsEngine.holeData.length,
       totalPar,
       totalScore,
+      scoreToPar: diff,
       scoreDiff: diffStr,
       fairwaysHit,
       fairwaysTotal,
@@ -468,15 +568,23 @@ class RoundsEngine {
       penalties,
       bunkerSaves,
       bunkersTotal,
-      notes
+      notes,
+      // Se persiste cada hoyo: así los golpes y penalidades no se pierden
+      // al cerrar la ronda y quedan disponibles para análisis posterior.
+      holes: RoundsEngine.holeData.map((hole) => ({ ...hole }))
     };
 
-    StorageManager.addRound(newRound);
-    App.closeModal();
-    App.showToast('🏆 ¡Ronda guardada con éxito!');
-
-    RoundsEngine.renderRoundsView();
-    if (window.App && App.renderDashboard) App.renderDashboard();
+    try {
+      await StorageManager.addRound(newRound);
+      App.closeModal();
+      App.showToast('🏆 ¡Ronda guardada con éxito!');
+      RoundsEngine.renderRoundsView();
+      if (window.App && App.renderDashboard) App.renderDashboard();
+      if (window.PlayerEngine && App.currentView === 'players') PlayerEngine.renderPlayersView();
+    } catch (error) {
+      console.error('No se pudo guardar la ronda:', error);
+      App.showToast('No se pudo guardar la ronda.');
+    }
   }
 }
 

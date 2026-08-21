@@ -1,18 +1,57 @@
 {
-  "name": "GolfCoach Pro • Mentor de Golf",
+  "id": "./",
+  "name": "GolfCoach Pro · Mentor de Golf",
   "short_name": "GolfCoach",
-  "description": "Plataforma integral de mentoría y entrenamiento de golf 360° inspirada en SotaPar",
-  "start_url": "./index.html",
+  "description": "Plataforma integral de mentoría, entrenamiento y seguimiento de golfistas.",
+  "lang": "es-AR",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0a0f0d",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#061c11",
   "theme_color": "#061c11",
-  "orientation": "portrait-primary",
+  "categories": ["sports", "health", "productivity"],
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='48' fill='%23104229'/><circle cx='50' cy='50' r='44' fill='none' stroke='%23d4af37' stroke-width='2'/><text x='50' y='65' font-size='42' text-anchor='middle'>⛳</text></svg>",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "src": "assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/icon-192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/icons/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Registrar ronda",
+      "short_name": "Nueva ronda",
+      "description": "Abrir el registro de una nueva ronda",
+      "url": "./?action=new-round",
+      "icons": [{ "src": "assets/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Golfistas",
+      "short_name": "Golfistas",
+      "description": "Abrir las fichas de golfistas",
+      "url": "./?view=players",
+      "icons": [{ "src": "assets/icons/icon-96.png", "sizes": "96x96", "type": "image/png" }]
     }
   ]
 }
