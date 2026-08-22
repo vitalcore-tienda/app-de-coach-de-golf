@@ -12,10 +12,15 @@ class PlayerEngine {
       .replace(/'/g, '&#039;');
   }
 
+  static safeNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
   static formatDate(value) {
     if (!value) return 'Sin fecha';
     const date = new Date(`${value}T12:00:00`);
-    if (Number.isNaN(date.getTime())) return value;
+    if (Number.isNaN(date.getTime())) return PlayerEngine.escapeHTML(value);
     return new Intl.DateTimeFormat('es-AR', { day: '2-digit', month: 'short', year: 'numeric' }).format(date);
   }
 
@@ -62,22 +67,22 @@ class PlayerEngine {
         <div class="grid-4" style="margin-bottom:1.5rem;">
           <div class="card stat-card">
             <div class="stat-label">Hándicap actual</div>
-            <div class="stat-value" style="color:var(--gold-400);">${activePlayer.handicap}</div>
-            <div class="stat-sub gold">Meta: ${activePlayer.targetHandicap}</div>
+            <div class="stat-value" style="color:var(--gold-400);">${PlayerEngine.safeNumber(activePlayer.handicap, 0)}</div>
+            <div class="stat-sub gold">Meta: ${PlayerEngine.safeNumber(activePlayer.targetHandicap, 0)}</div>
           </div>
           <div class="card stat-card">
             <div class="stat-label">Rondas cargadas</div>
-            <div class="stat-value">${roundCount}</div>
+            <div class="stat-value">${PlayerEngine.safeNumber(roundCount, 0)}</div>
             <div class="stat-sub">Datos por hoyo incluidos</div>
           </div>
           <div class="card stat-card">
             <div class="stat-label">Torneos finalizados</div>
-            <div class="stat-value">${completedTournaments}</div>
-            <div class="stat-sub">${tournaments.length} registrados</div>
+            <div class="stat-value">${PlayerEngine.safeNumber(completedTournaments, 0)}</div>
+            <div class="stat-sub">${PlayerEngine.safeNumber(tournaments.length, 0)} registrados</div>
           </div>
           <div class="card stat-card">
             <div class="stat-label">Último registro HCP</div>
-            <div class="stat-value" style="font-size:1.25rem;">${latestHandicap ? latestHandicap.handicap : '—'}</div>
+            <div class="stat-value" style="font-size:1.25rem;">${latestHandicap ? PlayerEngine.safeNumber(latestHandicap.handicap, 0) : '—'}</div>
             <div class="stat-sub">${latestHandicap ? PlayerEngine.formatDate(latestHandicap.date) : 'Aún no cargado'}</div>
           </div>
         </div>
@@ -137,6 +142,10 @@ class PlayerEngine {
           </div>
         </div>
       `;
+
+      container.querySelectorAll('[data-player-id]').forEach((button) => {
+        button.addEventListener('click', () => PlayerEngine.selectPlayer(button.dataset.playerId));
+      });
     } catch (error) {
       console.error('No se pudo cargar la ficha de golfistas:', error);
       container.innerHTML = '<div class="card"><h3>No se pudieron cargar los golfistas</h3><p style="color:var(--text-muted);">Intentá recargar la aplicación.</p></div>';
@@ -154,13 +163,15 @@ class PlayerEngine {
 
   static renderPlayerCard(player, activePlayerId) {
     const selected = player.id === activePlayerId;
+    const playerId = PlayerEngine.escapeHTML(player.id);
+    const playerName = String(player.name ?? '');
     return `
-      <button class="card" style="text-align:left; cursor:pointer; padding:1rem; border:${selected ? '1px solid var(--gold-400)' : '1px solid var(--border-subtle)'}; background:${selected ? 'rgba(212,175,55,0.08)' : 'var(--bg-card)'};" onclick="PlayerEngine.selectPlayer('${PlayerEngine.escapeHTML(player.id)}')">
+      <button class="card" data-player-id="${playerId}" style="text-align:left; cursor:pointer; padding:1rem; border:${selected ? '1px solid var(--gold-400)' : '1px solid var(--border-subtle)'}; background:${selected ? 'rgba(212,175,55,0.08)' : 'var(--bg-card)'};">
         <div style="display:flex; align-items:center; gap:0.7rem;">
-          <div class="player-avatar">${PlayerEngine.escapeHTML(player.name.charAt(0).toUpperCase())}</div>
+          <div class="player-avatar">${PlayerEngine.escapeHTML(playerName.charAt(0).toUpperCase())}</div>
           <div style="min-width:0;">
-            <div style="font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${PlayerEngine.escapeHTML(player.name)}</div>
-            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">HCP ${PlayerEngine.escapeHTML(player.handicap)} · Meta ${PlayerEngine.escapeHTML(player.targetHandicap)}</div>
+            <div style="font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${PlayerEngine.escapeHTML(playerName)}</div>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">HCP ${PlayerEngine.safeNumber(player.handicap, 0)} · Meta ${PlayerEngine.safeNumber(player.targetHandicap, 0)}</div>
           </div>
         </div>
         <div style="font-size:0.75rem; color:${selected ? 'var(--gold-400)' : 'var(--text-subtle)'}; margin-top:0.7rem;">${selected ? '● Golfista seleccionado' : 'Seleccionar ficha →'}</div>
@@ -177,7 +188,7 @@ class PlayerEngine {
         ${history.slice(0, 5).map((entry) => `
           <div style="display:flex; align-items:center; justify-content:space-between; gap:0.75rem; padding:0.55rem 0; border-bottom:1px solid var(--border-subtle);">
             <div>
-              <div style="font-weight:700; color:var(--gold-400);">HCP ${PlayerEngine.escapeHTML(entry.handicap)}</div>
+              <div style="font-weight:700; color:var(--gold-400);">HCP ${PlayerEngine.safeNumber(entry.handicap, 0)}</div>
               <div style="font-size:0.74rem; color:var(--text-subtle);">${PlayerEngine.escapeHTML(entry.source || 'Manual')} · ${PlayerEngine.formatDate(entry.date)}</div>
             </div>
             <div style="font-size:0.78rem; color:var(--text-muted); text-align:right; max-width:45%;">${PlayerEngine.escapeHTML(entry.notes || '')}</div>
@@ -203,7 +214,7 @@ class PlayerEngine {
                 <td>${PlayerEngine.escapeHTML(tournament.course || '—')}</td>
                 <td>${PlayerEngine.escapeHTML(tournament.format || 'Stroke Play')}</td>
                 <td><span class="badge ${tournament.status === 'Finalizado' ? 'badge-green' : 'badge-gold'}">${PlayerEngine.escapeHTML(tournament.status)}</span></td>
-                <td>${tournament.position || '—'}</td>
+                <td>${tournament.position ? PlayerEngine.safeNumber(tournament.position, 0) : '—'}</td>
               </tr>
             `).join('')}
           </tbody>

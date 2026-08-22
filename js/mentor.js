@@ -59,6 +59,81 @@ const COACH_KNOWLEDGE_BASE = [
 ];
 
 class MentorEngine {
+  static escapeHTML(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  static escapeWithLineBreaks(value) {
+    return MentorEngine.escapeHTML(value).replace(/\r?\n/g, '<br>');
+  }
+
+  static normalizeChatSender(sender) {
+    return sender === 'coach' ? 'coach' : 'user';
+  }
+
+  static clampProgress(value) {
+    const progress = Number.parseInt(value, 10);
+    if (!Number.isFinite(progress)) return 0;
+    return Math.min(100, Math.max(0, progress));
+  }
+
+  static renderChatMessage(message = {}) {
+    const sender = MentorEngine.normalizeChatSender(message?.sender);
+    const text = MentorEngine.escapeWithLineBreaks(message?.text);
+    const time = MentorEngine.escapeHTML(message?.time || '');
+
+    return `
+      <div class="chat-bubble ${sender}">
+        ${text}
+        <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 0.35rem; text-align: right;">${time}</div>
+      </div>
+    `;
+  }
+
+  static renderGoal(goal = {}) {
+    const progress = MentorEngine.clampProgress(goal?.progress);
+    const title = MentorEngine.escapeHTML(goal?.title);
+    const category = MentorEngine.escapeHTML(goal?.category);
+    const targetDate = MentorEngine.escapeHTML(goal?.targetDate);
+
+    return `
+      <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${title}</span>
+          <span class="badge badge-green">${progress}%</span>
+        </div>
+        <div class="progress-bar-container" style="margin-bottom: 0.4rem;">
+          <div class="progress-bar-fill" style="width: ${progress}%;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-subtle);">
+          <span>Categoría: ${category}</span>
+          <span>Fecha límite: ${targetDate}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  static renderNote(note = {}) {
+    const title = MentorEngine.escapeHTML(note?.title);
+    const date = MentorEngine.escapeHTML(note?.date);
+    const content = MentorEngine.escapeHTML(note?.content);
+
+    return `
+      <div style="background: var(--bg-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-md); border-left: 3px solid var(--gold-400);">
+        <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+          <h5 style="color: var(--text-main); font-size: 0.9rem;">${title}</h5>
+          <span style="font-size: 0.72rem; color: var(--text-subtle);">${date}</span>
+        </div>
+        <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">${content}</p>
+      </div>
+    `;
+  }
+
   static renderMentorView() {
     const container = document.getElementById('mentor-container');
     if (!container) return;
@@ -100,12 +175,7 @@ class MentorEngine {
           </div>
 
           <div class="chat-messages" id="chat-messages-box">
-            ${chatHistory.map(m => `
-              <div class="chat-bubble ${m.sender}">
-                ${m.text.replace(/\n/g, '<br>')}
-                <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 0.35rem; text-align: right;">${m.time || ''}</div>
-              </div>
-            `).join('')}
+            ${chatHistory.map((message) => MentorEngine.renderChatMessage(message)).join('')}
           </div>
 
           <!-- Quick prompts -->
@@ -135,21 +205,7 @@ class MentorEngine {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 1rem;">
-              ${goals.map(g => `
-                <div style="background: var(--bg-surface-elevated); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                    <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${g.title}</span>
-                    <span class="badge badge-green">${g.progress}%</span>
-                  </div>
-                  <div class="progress-bar-container" style="margin-bottom: 0.4rem;">
-                    <div class="progress-bar-fill" style="width: ${g.progress}%;"></div>
-                  </div>
-                  <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-subtle);">
-                    <span>Categoría: ${g.category}</span>
-                    <span>Fecha límite: ${g.targetDate}</span>
-                  </div>
-                </div>
-              `).join('')}
+              ${goals.map((goal) => MentorEngine.renderGoal(goal)).join('')}
             </div>
           </div>
 
@@ -164,15 +220,7 @@ class MentorEngine {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 0.85rem; max-height: 220px; overflow-y: auto;">
-              ${notes.map(n => `
-                <div style="background: var(--bg-surface-elevated); padding: 0.85rem 1rem; border-radius: var(--radius-md); border-left: 3px solid var(--gold-400);">
-                  <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
-                    <h5 style="color: var(--text-main); font-size: 0.9rem;">${n.title}</h5>
-                    <span style="font-size: 0.72rem; color: var(--text-subtle);">${n.date}</span>
-                  </div>
-                  <p style="font-size: 0.82rem; color: var(--text-muted); line-height: 1.4;">${n.content}</p>
-                </div>
-              `).join('')}
+              ${notes.map((note) => MentorEngine.renderNote(note)).join('')}
             </div>
           </div>
         </div>
@@ -238,12 +286,7 @@ class MentorEngine {
     if (!box) return;
 
     const history = StorageManager.getChatHistory();
-    box.innerHTML = history.map(m => `
-      <div class="chat-bubble ${m.sender}">
-        ${m.text.replace(/\n/g, '<br>')}
-        <div style="font-size: 0.7rem; color: var(--text-subtle); margin-top: 0.35rem; text-align: right;">${m.time || ''}</div>
-      </div>
-    `).join('');
+    box.innerHTML = history.map((message) => MentorEngine.renderChatMessage(message)).join('');
 
     MentorEngine.scrollChatToBottom();
   }
@@ -318,7 +361,7 @@ class MentorEngine {
     const title = document.getElementById('goal-title-input')?.value || '';
     const category = document.getElementById('goal-cat-select')?.value || 'Handicap';
     const targetDate = document.getElementById('goal-date-input')?.value || '';
-    const progress = parseInt(document.getElementById('goal-progress-input')?.value || 0);
+    const progress = MentorEngine.clampProgress(document.getElementById('goal-progress-input')?.value);
 
     if (!title.trim()) {
       App.showToast('Por favor escribe el título de la meta.');

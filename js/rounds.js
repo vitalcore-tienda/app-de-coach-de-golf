@@ -103,20 +103,33 @@ class RoundsEngine {
             </thead>
             <tbody>
               ${rounds.map(r => {
-                const firPct = r.fairwaysTotal > 0 ? Math.round((r.fairwaysHit / r.fairwaysTotal) * 100) : '-';
-                const girPct = r.girTotal > 0 ? Math.round((r.girHit / r.girTotal) * 100) : '-';
+                const fairwaysTotal = RoundsEngine.toNonNegativeInteger(r.fairwaysTotal);
+                const fairwaysHit = Math.min(
+                  RoundsEngine.toNonNegativeInteger(r.fairwaysHit),
+                  fairwaysTotal
+                );
+                const girTotal = RoundsEngine.toNonNegativeInteger(r.girTotal);
+                const girHit = Math.min(
+                  RoundsEngine.toNonNegativeInteger(r.girHit),
+                  girTotal
+                );
+                const firPct = fairwaysTotal > 0 ? Math.round((fairwaysHit / fairwaysTotal) * 100) : '-';
+                const girPct = girTotal > 0 ? Math.round((girHit / girTotal) * 100) : '-';
+                const scoreToPar = RoundsEngine.getScoreToPar(r);
+                const roundId = RoundsEngine.escapeHTML(r.id || '');
+                const hasHoleDetails = Array.isArray(r.holes) && r.holes.length > 0;
                 return `
                   <tr>
-                    <td>${r.date}</td>
-                    <td style="font-weight: 600; text-align: left; padding-left: 0.5rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${r.course}</td>
-                    <td><span class="badge ${r.kind === 'Torneo' ? 'badge-gold' : 'badge-blue'}">${r.kind || 'Práctica'}</span></td>
-                    <td>${r.holesCount}H</td>
-                    <td style="font-weight: 800; font-size: 1rem; color: var(--gold-400);">${r.totalScore}</td>
-                    <td><span class="score-chip ${parseInt(r.scoreDiff) <= 0 ? 'birdie' : 'bogey'}">${r.scoreDiff}</span></td>
+                    <td>${RoundsEngine.escapeHTML(r.date || '')}</td>
+                    <td style="font-weight: 600; text-align: left; padding-left: 0.5rem; max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${RoundsEngine.escapeHTML(r.course || '')}</td>
+                    <td><span class="badge ${r.kind === 'Torneo' ? 'badge-gold' : 'badge-blue'}">${RoundsEngine.escapeHTML(r.kind || 'Práctica')}</span></td>
+                    <td>${RoundsEngine.toNonNegativeInteger(r.holesCount, hasHoleDetails ? r.holes.length : 0)}H</td>
+                    <td style="font-weight: 800; font-size: 1rem; color: var(--gold-400);">${RoundsEngine.toNonNegativeInteger(r.totalScore)}</td>
+                    <td><span class="score-chip ${scoreToPar <= 0 ? 'birdie' : 'bogey'}">${RoundsEngine.formatScoreDiff(scoreToPar)}</span></td>
                     <td>${firPct}%</td>
                     <td>${girPct}%</td>
-                    <td style="font-weight: 700;">${r.totalPutts}</td>
-                    <td><button class="btn btn-secondary btn-sm" onclick="RoundsEngine.openRoundDetailsModal('${r.id}')">${r.holes?.length ? 'Ver' : 'Sin datos'}</button></td>
+                    <td style="font-weight: 700;">${RoundsEngine.toNonNegativeInteger(r.totalPutts)}</td>
+                    <td><button class="btn btn-secondary btn-sm" data-round-id="${roundId}">${hasHoleDetails ? 'Ver' : 'Sin datos'}</button></td>
                   </tr>
                 `;
               }).join('')}
@@ -125,6 +138,8 @@ class RoundsEngine {
         </div>
       </div>
     `;
+
+    RoundsEngine.bindRoundDetailsHandler(container);
   }
 
   static generateKPIsHTML(rounds) {
@@ -137,17 +152,21 @@ class RoundsEngine {
       `;
     }
 
-    const avgScore = Math.round(rounds.reduce((acc, r) => acc + r.totalScore, 0) / rounds.length);
+    const avgScore = Math.round(
+      rounds.reduce((acc, r) => acc + RoundsEngine.toNonNegativeInteger(r.totalScore), 0) / rounds.length
+    );
     let totalFirHit = 0, totalFirTot = 0;
     let totalGirHit = 0, totalGirTot = 0;
     let totalPutts = 0;
 
     rounds.forEach(r => {
-      totalFirHit += (r.fairwaysHit || 0);
-      totalFirTot += (r.fairwaysTotal || 14);
-      totalGirHit += (r.girHit || 0);
-      totalGirTot += (r.girTotal || 18);
-      totalPutts += (r.totalPutts || 36);
+      const fairwaysTotal = RoundsEngine.toNonNegativeInteger(r.fairwaysTotal, 14) || 14;
+      const girTotal = RoundsEngine.toNonNegativeInteger(r.girTotal, 18) || 18;
+      totalFirHit += Math.min(RoundsEngine.toNonNegativeInteger(r.fairwaysHit), fairwaysTotal);
+      totalFirTot += fairwaysTotal;
+      totalGirHit += Math.min(RoundsEngine.toNonNegativeInteger(r.girHit), girTotal);
+      totalGirTot += girTotal;
+      totalPutts += RoundsEngine.toNonNegativeInteger(r.totalPutts, 36) || 36;
     });
 
     const firPct = Math.round((totalFirHit / (totalFirTot || 1)) * 100);
@@ -183,7 +202,7 @@ class RoundsEngine {
       return `<p style="color: var(--text-muted); font-size: 0.85rem;">Registra 2 o más rondas para ver la evolución.</p>`;
     }
 
-    const scores = rounds.slice().reverse().map(r => r.totalScore);
+    const scores = rounds.slice().reverse().map(r => RoundsEngine.toNonNegativeInteger(r.totalScore));
     const width = 500;
     const height = 160;
     const padding = 30;
@@ -456,6 +475,45 @@ class RoundsEngine {
     }
   }
 
+  static toNonNegativeInteger(value, fallback = 0) {
+    const numeric = Number(value);
+    const safeFallback = Number.isFinite(Number(fallback)) ? Number(fallback) : 0;
+    return Math.max(0, Math.round(Number.isFinite(numeric) ? numeric : safeFallback));
+  }
+
+  static getScoreToPar(round = {}) {
+    const storedScoreToPar = Number(round?.scoreToPar);
+    if (Number.isFinite(storedScoreToPar)) return Math.round(storedScoreToPar);
+
+    const storedScoreDiff = String(round?.scoreDiff ?? '').trim();
+    if (storedScoreDiff.toUpperCase() === 'E') return 0;
+    const parsedScoreDiff = Number(storedScoreDiff);
+    if (Number.isFinite(parsedScoreDiff)) return Math.round(parsedScoreDiff);
+
+    return RoundsEngine.toNonNegativeInteger(round?.totalScore)
+      - RoundsEngine.toNonNegativeInteger(round?.totalPar);
+  }
+
+  static formatScoreDiff(value) {
+    const scoreToPar = Number.isFinite(Number(value)) ? Math.round(Number(value)) : 0;
+    return scoreToPar > 0 ? `+${scoreToPar}` : (scoreToPar === 0 ? 'E' : `${scoreToPar}`);
+  }
+
+  static bindRoundDetailsHandler(container) {
+    if (container.dataset.roundDetailsHandlerBound === 'true') return;
+    container.addEventListener('click', RoundsEngine.handleRoundDetailsClick);
+    container.dataset.roundDetailsHandlerBound = 'true';
+  }
+
+  static handleRoundDetailsClick(event) {
+    const target = event.target;
+    const button = target instanceof Element ? target.closest('[data-round-id]') : null;
+    if (!button || !event.currentTarget?.contains(button)) return;
+
+    const roundId = button.dataset.roundId;
+    if (roundId) RoundsEngine.openRoundDetailsModal(roundId);
+  }
+
   static escapeHTML(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -466,46 +524,66 @@ class RoundsEngine {
   }
 
   static openRoundDetailsModal(roundId) {
-    const round = StorageManager.getRounds().find((item) => item.id === roundId);
+    const round = StorageManager.getRounds().find((item) => item?.id === roundId);
     const modalContent = document.getElementById('global-modal-content');
     if (!round || !modalContent) return;
 
-    const holes = Array.isArray(round.holes) ? round.holes.slice().sort((a, b) => a.hole - b.hole) : [];
+    const holes = Array.isArray(round.holes)
+      ? round.holes
+        .filter((hole) => hole && typeof hole === 'object')
+        .slice()
+        .sort((a, b) => RoundsEngine.toNonNegativeInteger(a.hole) - RoundsEngine.toNonNegativeInteger(b.hole))
+      : [];
+    const kind = RoundsEngine.escapeHTML(round.kind || 'Práctica');
+    const course = RoundsEngine.escapeHTML(round.course || '');
+    const date = RoundsEngine.escapeHTML(round.date || '');
+    const totalScore = RoundsEngine.toNonNegativeInteger(round.totalScore);
+    const totalPutts = RoundsEngine.toNonNegativeInteger(round.totalPutts);
+    const penalties = RoundsEngine.toNonNegativeInteger(round.penalties);
+    const scoreDiff = RoundsEngine.formatScoreDiff(RoundsEngine.getScoreToPar(round));
+    const notes = String(round.notes ?? '').trim();
+    const holeRows = holes.map((hole) => {
+      const holeNumber = RoundsEngine.toNonNegativeInteger(hole.hole);
+      const par = RoundsEngine.toNonNegativeInteger(hole.par);
+      const strokes = RoundsEngine.toNonNegativeInteger(hole.strokes);
+      const putts = RoundsEngine.toNonNegativeInteger(hole.putts);
+      const penalty = RoundsEngine.toNonNegativeInteger(hole.penalty);
+      const diff = strokes - par;
+      const diffText = RoundsEngine.formatScoreDiff(diff);
+      return `<tr>
+        <td>${holeNumber}</td><td>${par}</td><td style="font-weight:700;">${strokes}</td>
+        <td>${diffText}</td><td>${putts}</td>
+        <td>${par > 3 ? (hole.fir === true ? '✓' : '—') : 'N/A'}</td>
+        <td>${hole.gir === true ? '✓' : '—'}</td><td>${hole.bunker === true ? '✓' : '—'}</td><td>${penalty}</td>
+      </tr>`;
+    }).join('');
+
     modalContent.innerHTML = `
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
         <div>
-          <span class="badge ${round.kind === 'Torneo' ? 'badge-gold' : 'badge-blue'}">${RoundsEngine.escapeHTML(round.kind || 'Práctica')}</span>
-          <h3 style="margin-top:0.3rem;">${RoundsEngine.escapeHTML(round.course)} · ${RoundsEngine.escapeHTML(round.date)}</h3>
+          <span class="badge ${round.kind === 'Torneo' ? 'badge-gold' : 'badge-blue'}">${kind}</span>
+          <h3 style="margin-top:0.3rem;">${course} · ${date}</h3>
         </div>
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
       <div class="grid-4" style="margin-bottom:1rem;">
-        <div class="card stat-card"><div class="stat-label">Golpes</div><div class="stat-value">${round.totalScore}</div></div>
-        <div class="card stat-card"><div class="stat-label">vs Par</div><div class="stat-value">${RoundsEngine.escapeHTML(round.scoreDiff)}</div></div>
-        <div class="card stat-card"><div class="stat-label">Putts</div><div class="stat-value">${round.totalPutts}</div></div>
-        <div class="card stat-card"><div class="stat-label">Penalidades</div><div class="stat-value">${round.penalties || 0}</div></div>
+        <div class="card stat-card"><div class="stat-label">Golpes</div><div class="stat-value">${totalScore}</div></div>
+        <div class="card stat-card"><div class="stat-label">vs Par</div><div class="stat-value">${scoreDiff}</div></div>
+        <div class="card stat-card"><div class="stat-label">Putts</div><div class="stat-value">${totalPutts}</div></div>
+        <div class="card stat-card"><div class="stat-label">Penalidades</div><div class="stat-value">${penalties}</div></div>
       </div>
       ${holes.length ? `
         <div class="scorecard-table-wrapper">
           <table class="scorecard-table">
             <thead><tr><th>Hoyo</th><th>Par</th><th>Golpes</th><th>vs Par</th><th>Putts</th><th>FIR</th><th>GIR</th><th>Bunker</th><th>Pen.</th></tr></thead>
             <tbody>
-              ${holes.map((hole) => {
-                const diff = Number(hole.strokes || 0) - Number(hole.par || 0);
-                const diffText = diff > 0 ? `+${diff}` : (diff === 0 ? 'E' : `${diff}`);
-                return `<tr>
-                  <td>${hole.hole}</td><td>${hole.par}</td><td style="font-weight:700;">${hole.strokes}</td>
-                  <td>${diffText}</td><td>${hole.putts ?? 0}</td>
-                  <td>${hole.par > 3 ? (hole.fir ? '✓' : '—') : 'N/A'}</td>
-                  <td>${hole.gir ? '✓' : '—'}</td><td>${hole.bunker ? '✓' : '—'}</td><td>${hole.penalty || 0}</td>
-                </tr>`;
-              }).join('')}
+              ${holeRows}
             </tbody>
           </table>
         </div>
       ` : '<p style="color:var(--text-muted); font-size:0.9rem;">Esta es una ronda histórica importada sin detalle por hoyo. Las nuevas rondas sí guardan cada golpe, putt y penalidad por hoyo.</p>'}
-      ${round.notes ? `<div style="margin-top:1rem; font-size:0.88rem; color:var(--text-muted);"><strong style="color:var(--text-main);">Notas:</strong> ${RoundsEngine.escapeHTML(round.notes)}</div>` : ''}
+      ${notes ? `<div style="margin-top:1rem; font-size:0.88rem; color:var(--text-muted);"><strong style="color:var(--text-main);">Notas:</strong> ${RoundsEngine.escapeHTML(notes)}</div>` : ''}
     `;
     App.openModal();
   }

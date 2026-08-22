@@ -356,6 +356,12 @@ class StorageManager {
     return StorageManager.activePlayerId;
   }
 
+  static queueCloudSync(playerId = StorageManager.activePlayerId) {
+    if (!StorageManager.persistenceAvailable || !playerId || !window.CloudSync?.queueLocalPlayer) return;
+    CloudSync.queueLocalPlayer(playerId)
+      .catch((error) => console.warn('No se pudo dejar el respaldo cloud en cola:', error));
+  }
+
   static async getPlayers() {
     if (StorageManager.persistenceAvailable) {
       const players = await GolfDatabase.getAll(GOLF_DATABASE.STORES.PLAYERS);
@@ -383,6 +389,7 @@ class StorageManager {
         createdAt: new Date().toISOString()
       });
       await StorageManager.loadActivePlayer(player.id);
+      StorageManager.queueCloudSync(player.id);
       return player;
     }
 
@@ -396,6 +403,7 @@ class StorageManager {
     StorageManager.set(STORAGE_KEYS.PROFILE, player);
     StorageManager.set(STORAGE_KEYS.ACTIVE_PLAYER, player.id);
     StorageManager.set(STORAGE_KEYS.ROUNDS, []);
+    StorageManager.queueCloudSync(player.id);
     return player;
   }
 
@@ -452,6 +460,7 @@ class StorageManager {
       else players.push(player);
       StorageManager.set(STORAGE_KEYS.PLAYERS, players);
     }
+    StorageManager.queueCloudSync(player.id);
     return StorageManager.clone(player);
   }
 
@@ -474,6 +483,7 @@ class StorageManager {
         updatedAt: new Date().toISOString()
       });
     }
+    StorageManager.queueCloudSync();
     return cloned;
   }
 
@@ -500,6 +510,7 @@ class StorageManager {
     if (StorageManager.persistenceAvailable && StorageManager.activePlayerId) {
       await GolfDatabase.replacePlayerRounds(StorageManager.activePlayerId, normalized);
     }
+    StorageManager.queueCloudSync();
     return StorageManager.clone(normalized);
   }
 
@@ -515,6 +526,7 @@ class StorageManager {
     StorageManager.set(STORAGE_KEYS.ROUNDS, rounds);
     StorageManager.set(StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS), rounds);
     if (StorageManager.persistenceAvailable) await GolfDatabase.saveRound(newRound);
+    StorageManager.queueCloudSync();
     return StorageManager.clone(rounds);
   }
 
@@ -560,6 +572,7 @@ class StorageManager {
       profile.handicap = handicap;
       await StorageManager.saveProfile(profile, { recordHandicap: false });
     }
+    StorageManager.queueCloudSync(playerId);
     return entry;
   }
 
@@ -608,6 +621,7 @@ class StorageManager {
       else tournaments.push(normalized);
       await StorageManager.savePlayerData('golfcoach_tournaments', tournaments);
     }
+    StorageManager.queueCloudSync(playerId);
     return normalized;
   }
 

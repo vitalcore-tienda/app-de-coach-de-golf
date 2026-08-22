@@ -11,6 +11,12 @@ class App {
     // 1. Cargar la base local y migrar los datos que ya existían.
     await StorageManager.initialize();
 
+    // 1.1 Restaurar la sesión cloud sin bloquear el modo local/offline.
+    // El respaldo se activa explícitamente desde CloudSync y nunca impide usar la app.
+    if (window.AuthEngine) {
+      AuthEngine.init().catch(error => console.warn('No se pudo iniciar el acceso cloud:', error));
+    }
+
     // 2. Setup Theme
     App.currentTheme = StorageManager.get(STORAGE_KEYS.THEME, 'dark');
     document.documentElement.setAttribute('data-theme', App.currentTheme);
@@ -124,9 +130,22 @@ class App {
     const assessment = StorageManager.getAssessment();
     const rounds = StorageManager.getRounds();
     const goals = StorageManager.getGoals();
+    const scores = window.AssessmentEngine?.normalizeScores
+      ? AssessmentEngine.normalizeScores(assessment?.scores)
+      : { swing: 50, shortGame: 50, strategy: 50, mental: 50, fitness: 50 };
 
     const lastRound = rounds[0] || null;
-    const avgScore = rounds.length > 0 ? Math.round(rounds.reduce((a, r) => a + r.totalScore, 0) / rounds.length) : '-';
+    const avgScore = rounds.length > 0
+      ? Math.round(rounds.reduce((sum, round) => sum + App.safeNumber(round.totalScore), 0) / rounds.length)
+      : '-';
+    const profileName = App.escapeHTML(profile.name || 'Golfista');
+    const handicap = App.safeNumber(profile.handicap, 0);
+    const targetHandicap = App.safeNumber(profile.targetHandicap, 0);
+    const playerCategory = App.escapeHTML(profile.playerCategory || '—');
+    const homeClub = App.escapeHTML(profile.homeClub || '—');
+    const lastRoundScore = lastRound ? App.safeNumber(lastRound.totalScore, 0) : '-';
+    const lastRoundDiff = lastRound ? App.escapeHTML(lastRound.scoreDiff || '—') : '';
+    const lastRoundCourse = lastRound ? App.escapeHTML(lastRound.course || '—') : 'Sin rondas';
 
     container.innerHTML = `
       <!-- Welcome Hero Banner -->
@@ -137,7 +156,7 @@ class App {
               <span class="badge badge-gold">Metodología 360° SotaPar</span>
               <span class="badge badge-green">En Entrenamiento</span>
             </div>
-            <h2>Bienvenido, ${profile.name}</h2>
+            <h2>Bienvenido, ${profileName}</h2>
             <p style="font-size: 0.88rem; max-width: 600px;">
               Tu camino para bajar de hándicap dominando técnica, juego corto, estrategia de torneo y fortaleza mental.
             </p>
@@ -157,8 +176,8 @@ class App {
       <div class="grid-4" style="margin-bottom: 1.5rem;">
         <div class="card stat-card">
           <div class="stat-label">Hándicap Actual</div>
-          <div class="stat-value" style="color: var(--gold-400);">${profile.handicap}</div>
-          <div class="stat-sub gold">🎯 Meta: ${profile.targetHandicap}</div>
+          <div class="stat-value" style="color: var(--gold-400);">${handicap}</div>
+          <div class="stat-sub gold">🎯 Meta: ${targetHandicap}</div>
         </div>
 
         <div class="card stat-card">
@@ -169,16 +188,16 @@ class App {
 
         <div class="card stat-card">
           <div class="stat-label">Última Ronda</div>
-          <div class="stat-value" style="font-size: 1.4rem;">${lastRound ? `${lastRound.totalScore} (${lastRound.scoreDiff})` : '-'}</div>
-          <div class="stat-sub" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${lastRound ? lastRound.course : 'Sin rondas'}</div>
+          <div class="stat-value" style="font-size: 1.4rem;">${lastRound ? `${lastRoundScore} (${lastRoundDiff})` : '-'}</div>
+          <div class="stat-sub" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${lastRoundCourse}</div>
         </div>
 
         <div class="card stat-card">
           <div class="stat-label">Perfil de Jugador</div>
           <div class="stat-value" style="font-size: 1rem; line-height: 1.3; color: var(--primary-300);">
-            ${profile.playerCategory}
+            ${playerCategory}
           </div>
-          <div class="stat-sub gold">🏌️ Club: ${profile.homeClub}</div>
+          <div class="stat-sub gold">🏌️ Club: ${homeClub}</div>
         </div>
       </div>
 
@@ -194,28 +213,28 @@ class App {
             <button class="btn btn-secondary btn-sm" onclick="App.navigateTo('assessment')">Detalles</button>
           </div>
           <div class="radar-container">
-            ${AssessmentEngine.generateRadarSVG(assessment.scores)}
+            ${AssessmentEngine.generateRadarSVG(scores)}
           </div>
           <div style="display: flex; justify-content: space-around; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem; margin-top: 0.5rem;">
             <div>
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Swing</span>
-              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.swing}%</div>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.swing}%</div>
             </div>
             <div>
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Corto</span>
-              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.shortGame}%</div>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.shortGame}%</div>
             </div>
             <div>
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Estrategia</span>
-              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.strategy}%</div>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.strategy}%</div>
             </div>
             <div>
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Mente</span>
-              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.mental}%</div>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.mental}%</div>
             </div>
             <div>
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Físico</span>
-              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${assessment.scores.fitness}%</div>
+              <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.fitness}%</div>
             </div>
           </div>
         </div>
@@ -253,17 +272,20 @@ class App {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-              ${goals.slice(0, 2).map(g => `
+              ${goals.slice(0, 2).map(g => {
+                const progress = App.clampNumber(g.progress, 0, 100, 0);
+                return `
                 <div>
                   <div style="display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 0.25rem;">
-                    <span style="font-weight: 600;">${g.title}</span>
-                    <span style="color: var(--gold-400); font-weight: 700;">${g.progress}%</span>
+                    <span style="font-weight: 600;">${App.escapeHTML(g.title || 'Meta sin título')}</span>
+                    <span style="color: var(--gold-400); font-weight: 700;">${progress}%</span>
                   </div>
                   <div class="progress-bar-container">
-                    <div class="progress-bar-fill" style="width: ${g.progress}%;"></div>
+                    <div class="progress-bar-fill" style="width: ${progress}%;"></div>
                   </div>
                 </div>
-              `).join('')}
+              `;
+              }).join('')}
             </div>
           </div>
         </div>
@@ -287,24 +309,27 @@ class App {
 
   static updateProfileDisplay() {
     const profile = StorageManager.getProfile();
+    const name = String(profile?.name || 'Golfista');
+    const handicap = App.safeNumber(profile?.handicap, 0);
+    const targetHandicap = App.safeNumber(profile?.targetHandicap, 0);
     
     // Sidebar elements
     const nameEl = document.getElementById('sidebar-player-name');
     const hcpEl = document.getElementById('sidebar-player-hcp');
     const avatarEl = document.getElementById('sidebar-player-avatar');
 
-    if (nameEl) nameEl.innerText = profile.name;
-    if (hcpEl) hcpEl.innerText = `HCP: ${profile.handicap} (Meta: ${profile.targetHandicap})`;
-    if (avatarEl) avatarEl.innerText = profile.name.charAt(0).toUpperCase();
+    if (nameEl) nameEl.innerText = name;
+    if (hcpEl) hcpEl.innerText = `HCP: ${handicap} (Meta: ${targetHandicap})`;
+    if (avatarEl) avatarEl.innerText = name.charAt(0).toUpperCase();
 
     // Drawer elements
     const dNameEl = document.getElementById('drawer-player-name');
     const dHcpEl = document.getElementById('drawer-player-hcp');
     const dAvatarEl = document.getElementById('drawer-player-avatar');
 
-    if (dNameEl) dNameEl.innerText = profile.name;
-    if (dHcpEl) dHcpEl.innerText = `HCP: ${profile.handicap} • Editar ⚙️`;
-    if (dAvatarEl) dAvatarEl.innerText = profile.name.charAt(0).toUpperCase();
+    if (dNameEl) dNameEl.innerText = name;
+    if (dHcpEl) dHcpEl.innerText = `HCP: ${handicap} • Editar ⚙️`;
+    if (dAvatarEl) dAvatarEl.innerText = name.charAt(0).toUpperCase();
   }
 
   static openProfileModal() {
@@ -342,11 +367,11 @@ class App {
       <div class="grid-3">
         <div class="form-group">
           <label class="form-label">Hándicap Actual</label>
-          <input type="number" step="0.1" class="form-control" id="profile-hcp-input" value="${profile.handicap}">
+          <input type="number" step="0.1" class="form-control" id="profile-hcp-input" value="${App.safeNumber(profile.handicap, 0)}">
         </div>
         <div class="form-group">
           <label class="form-label">Hándicap Objetivo</label>
-          <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${profile.targetHandicap}">
+          <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${App.safeNumber(profile.targetHandicap, 0)}">
         </div>
         <div class="form-group">
           <label class="form-label">Licencia Federativa</label>
@@ -361,7 +386,7 @@ class App {
         </div>
         <div class="form-group">
           <label class="form-label">Carry Driver (m)</label>
-          <input type="number" class="form-control" id="profile-driver-input" value="${profile.driverDistanceAvg}">
+          <input type="number" class="form-control" id="profile-driver-input" value="${App.safeNumber(profile.driverDistanceAvg, 0)}">
         </div>
       </div>
 
@@ -375,7 +400,7 @@ class App {
         </div>
         <div class="form-group">
           <label class="form-label">Años de Experiencia</label>
-          <input type="number" min="0" class="form-control" id="profile-experience-input" value="${profile.experienceYears || 0}">
+          <input type="number" min="0" class="form-control" id="profile-experience-input" value="${App.safeNumber(profile.experienceYears, 0)}">
         </div>
         <div class="form-group">
           <label class="form-label">Fecha de Nacimiento</label>
@@ -433,6 +458,15 @@ class App {
       .replace(/'/g, '&#039;');
   }
 
+  static safeNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  static clampNumber(value, min, max, fallback = min) {
+    return Math.min(max, Math.max(min, App.safeNumber(value, fallback)));
+  }
+
   static openModal() {
     const modal = document.getElementById('global-modal');
     if (modal) modal.classList.add('active');
@@ -454,7 +488,11 @@ class App {
 
     const toast = document.createElement('div');
     toast.className = 'toast';
-    toast.innerHTML = `<span>⛳</span> <div>${message}</div>`;
+    const icon = document.createElement('span');
+    icon.textContent = '⛳';
+    const content = document.createElement('div');
+    content.textContent = String(message ?? '');
+    toast.replaceChildren(icon, content);
     container.appendChild(toast);
 
     setTimeout(() => {
