@@ -6,6 +6,7 @@
  */
 
 class AuthEngine {
+  static PROFILE_CACHE_PREFIX = 'auth-profile-cache:';
   static supabaseUrl = 'https://qfcvoenhnxxonemqsvmy.supabase.co';
   // Las publishable keys son deliberadamente públicas: RLS protege los datos.
   // Nunca agregar aquí una service_role o una clave secreta.
@@ -62,6 +63,7 @@ class AuthEngine {
 
     AuthEngine.updateAccessButton();
     window.CloudSync?.onAuthStateChanged?.();
+    await window.PlayerPortal?.onAuthStateChanged?.();
   }
 
   static async handleAuthEvent(event, session) {
@@ -69,6 +71,7 @@ class AuthEngine {
       AuthEngine.user = null;
       AuthEngine.profile = null;
       AuthEngine.updateAccessButton();
+      await window.PlayerPortal?.onAuthStateChanged?.();
       return;
     }
 
@@ -76,6 +79,7 @@ class AuthEngine {
       await AuthEngine.refreshIdentity();
       if (AuthEngine.user) AuthEngine.clearAuthCallbackArtifacts();
       await window.CloudSync?.onAuthStateChanged?.();
+      await window.PlayerPortal?.onAuthStateChanged?.();
       if (event === 'SIGNED_IN') {
         AuthEngine.toast('✅ Sesión iniciada.');
       }
@@ -105,7 +109,7 @@ class AuthEngine {
       // Nunca reutilizar el rol de otra sesión que pudo haber quedado en el
       // almacenamiento del navegador.
       if (AuthEngine.profile?.id !== localUser?.id) {
-        AuthEngine.profile = null;
+        AuthEngine.profile = await AuthEngine.readCachedProfile(localUser?.id);
       }
       AuthEngine.user = localUser;
       AuthEngine.updateAccessButton();
@@ -138,6 +142,7 @@ class AuthEngine {
       AuthEngine.profile = null;
     } else {
       AuthEngine.profile = profile || null;
+      await AuthEngine.saveCachedProfile(AuthEngine.profile);
     }
 
     AuthEngine.updateAccessButton();
@@ -165,6 +170,33 @@ class AuthEngine {
 
   static isCoach() {
     return AuthEngine.profile?.account_role === 'coach';
+  }
+
+  static profileCacheId(userId) {
+    return `${AuthEngine.PROFILE_CACHE_PREFIX}${userId || 'unknown'}`;
+  }
+
+  static async saveCachedProfile(profile) {
+    if (!profile?.id || !window.GolfDatabase?.isAvailable) return;
+    try {
+      await GolfDatabase.put(GOLF_DATABASE.STORES.SETTINGS, {
+        id: AuthEngine.profileCacheId(profile.id),
+        value: profile,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (error) {
+      console.warn('No se pudo guardar el rol para el acceso offline:', error);
+    }
+  }
+
+  static async readCachedProfile(userId) {
+    if (!userId || !window.GolfDatabase?.isAvailable) return null;
+    try {
+      const cached = await GolfDatabase.get(GOLF_DATABASE.STORES.SETTINGS, AuthEngine.profileCacheId(userId));
+      return cached?.value?.id === userId ? cached.value : null;
+    } catch (error) {
+      return null;
+    }
   }
 
   static roleLabel() {
@@ -382,6 +414,7 @@ class AuthEngine {
       if (input) input.value = '';
       AuthEngine.renderSignedInModal();
       await window.CloudSync?.onAuthStateChanged?.();
+      await window.PlayerPortal?.onAuthStateChanged?.();
       AuthEngine.toast('🏌️ Cuenta de entrenador activada.');
     } catch (error) {
       // Nunca mostrar ni registrar el código introducido.
@@ -407,6 +440,7 @@ class AuthEngine {
       AuthEngine.user = null;
       AuthEngine.profile = null;
       AuthEngine.updateAccessButton();
+      await window.PlayerPortal?.onAuthStateChanged?.();
       window.App?.closeModal();
       AuthEngine.toast('Sesión cerrada en este dispositivo.');
     }

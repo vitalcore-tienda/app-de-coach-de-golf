@@ -109,10 +109,10 @@
           <button class="btn-icon" id="theme-toggle-btn" onclick="App.toggleTheme()" title="Cambiar tema claro/oscuro">
             ☀️
           </button>
-          <button class="btn-icon" onclick="App.openProfileModal()" title="Configuración de Perfil">
+          <button class="btn-icon" id="profile-settings-btn" onclick="App.openProfileModal()" title="Configuración de Perfil">
             ⚙️
           </button>
-          <button class="btn btn-primary btn-sm" onclick="RoundsEngine.openNewRoundModal()">
+          <button class="btn btn-primary btn-sm" id="topbar-new-round-btn" onclick="RoundsEngine.openNewRoundModal()">
             ➕ Ronda
           </button>
         </div>
@@ -121,6 +121,11 @@
       <!-- 1. Dashboard View Panel -->
       <section class="view-panel active" id="dashboard-panel">
         <div id="dashboard-container"></div>
+      </section>
+
+      <!-- Private player experience. Activated only for authenticated golfers. -->
+      <section class="view-panel" id="player-portal-panel" aria-live="polite">
+        <div id="player-portal-container"></div>
       </section>
 
       <!-- 2. Players & Database View Panel -->
@@ -272,6 +277,7 @@
   <script src="js/pwa.js"></script>
   <script src="vendor/supabase/supabase-js-2.112.3.js"></script>
   <script src="js/auth.js"></script>
+  <script src="js/player-portal.js"></script>
   <script src="js/cloud-sync.js"></script>
   <script src="js/app.js"></script>
 

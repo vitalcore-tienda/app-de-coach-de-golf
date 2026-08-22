@@ -574,6 +574,33 @@ a:hover {
   }
 }
 
+/* Authenticated golfers get a focused portal instead of coach controls. */
+body.player-portal-active .sidebar,
+body.player-portal-active .bottom-nav-bar,
+body.player-portal-active .mobile-drawer-overlay,
+body.player-portal-active #mobile-drawer-toggle-btn,
+body.player-portal-active #profile-settings-btn,
+body.player-portal-active #topbar-new-round-btn,
+body.player-portal-active #cloud-sync-btn {
+  display: none !important;
+}
+
+body.player-portal-active .main-content {
+  margin-left: 0;
+  width: 100%;
+  padding-bottom: 0;
+}
+
+body.player-portal-active #player-portal-panel {
+  max-width: 1180px;
+  padding-bottom: calc(2rem + var(--sab));
+}
+
+body.player-portal-active .topbar {
+  padding-left: max(1rem, var(--sal));
+  padding-right: max(1rem, var(--sar));
+}
+
 /* Scrollbar Customization */
 ::-webkit-scrollbar {
   width: 6px;

@@ -6,7 +6,7 @@
  * lista, incrementá CACHE_VERSION para publicar una versión nueva.
  */
 
-const CACHE_VERSION = 'golfcoach-pro-shell-v4';
+const CACHE_VERSION = 'golfcoach-pro-shell-v6';
 const CACHE_PREFIX = 'golfcoach-pro-';
 const toScopeUrl = (path) => new URL(path, self.registration.scope).href;
 
@@ -28,6 +28,7 @@ const APP_SHELL = [
   './js/mentor.js',
   './js/app.js',
   './js/auth.js',
+  './js/player-portal.js',
   './js/cloud-sync.js',
   './vendor/supabase/supabase-js-2.112.3.js',
   './assets/icons/favicon-32.png',

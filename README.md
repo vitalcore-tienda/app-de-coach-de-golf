@@ -46,6 +46,7 @@ coach-de-golf/
     ├── mentor.js                # Chat interactivo con el Coach, metas SMART y diario del jugador
     ├── pwa.js                   # Instalación, atajos y aviso de conectividad
     ├── auth.js                  # Magic Link, sesión y activación del primer entrenador
+    ├── player-portal.js         # Vista privada del golfista y mensajería con su entrenador
     └── app.js                   # Controlador principal, cambio de temas y gestión de modales
 ```
 
@@ -95,6 +96,13 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 - Las reglas RLS impiden que un golfista consulte a otros jugadores, y que un entrenador acceda a jugadores que no tiene asignados.
 - El rol de primer entrenador se protege con un código de configuración de una sola vez; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
 - El acceso se abre desde el ícono ✉️ de la barra superior. No utiliza contraseña: Supabase envía un Magic Link y la app conserva la sesión del dispositivo mediante su cliente oficial versionado localmente.
+
+### Experiencia según el rol
+
+- **Entrenador:** conserva el panel completo para crear y administrar golfistas, cargar handicap, torneos y rondas. En cada ficha respaldada en la nube también puede asignar entrenamientos y abrir una conversación privada.
+- **Golfista:** al iniciar sesión ve únicamente **Mi golf**, una pantalla simplificada con handicap y evolución, entrenamientos asignados, próximos torneos, metas, resultados/rondas y mensajes de su entrenador. No aparecen controles para crear, cambiar ni administrar a otros golfistas.
+- El golfista puede marcar sus entrenamientos como iniciados o completados y responder mensajes. Las políticas RLS de Supabase limitan todas las lecturas y cambios a la ficha vinculada con su propio correo.
+- La última versión consultada del portal se guarda en el dispositivo para poder verla sin conexión. Enviar mensajes, cambiar el estado de un entrenamiento o traer datos nuevos requiere conexión.
 
 Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabase/migrations`](database/supabase/migrations): estructura, endurecimiento del primer entrenador, seguridad adicional e índices. El proyecto de Supabase debe ser exclusivo de GolfCoach; no se deben aplicar estas migraciones a otras apps de VitalCore. En Supabase Auth, Site URL y Redirect URL deben ser exactamente `https://vitalcore-tienda.github.io/app-de-coach-de-golf/`.
 

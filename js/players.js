@@ -48,6 +48,7 @@ class PlayerEngine {
       const latestHandicap = handicapHistory[0];
       const completedTournaments = tournaments.filter((tournament) => tournament.status === 'Finalizado').length;
       const roundCount = rounds.length;
+      const coachCollaborationActions = window.PlayerPortal?.renderCoachActions?.(activePlayer) || '';
 
       container.innerHTML = `
         <div class="card card-gold-glow" style="margin-bottom: 1.5rem;">
@@ -58,6 +59,7 @@ class PlayerEngine {
               <p>Centralizá perfil, evolución de hándicap, torneos y cada ronda del jugador seleccionado.</p>
             </div>
             <div style="display:flex; gap:0.5rem; flex-wrap:wrap; width:100%; justify-content:flex-end;">
+              ${coachCollaborationActions}
               <button class="btn btn-secondary btn-sm" onclick="App.openProfileModal()">✏️ Editar ficha</button>
               <button class="btn btn-primary btn-sm" onclick="PlayerEngine.openNewPlayerModal()">➕ Nuevo golfista</button>
             </div>
@@ -145,6 +147,12 @@ class PlayerEngine {
 
       container.querySelectorAll('[data-player-id]').forEach((button) => {
         button.addEventListener('click', () => PlayerEngine.selectPlayer(button.dataset.playerId));
+      });
+      container.querySelectorAll('[data-player-training-id]').forEach((button) => {
+        button.addEventListener('click', () => PlayerPortal.openCoachTrainingModal(button.dataset.playerTrainingId));
+      });
+      container.querySelectorAll('[data-player-message-id]').forEach((button) => {
+        button.addEventListener('click', () => PlayerPortal.openCoachMessagesModal(button.dataset.playerMessageId));
       });
     } catch (error) {
       console.error('No se pudo cargar la ficha de golfistas:', error);
