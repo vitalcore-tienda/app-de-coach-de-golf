@@ -20,19 +20,29 @@ Plataforma web interactiva de mentoría, entrenamiento estructurado y gestión d
 ```text
 coach-de-golf/
 ├── index.html                   # Interfaz SPA con navegación por pestañas y diseño responsive
+├── manifest.json                # Metadatos de la aplicación instalable (PWA)
+├── service-worker.js            # Caché offline de la interfaz y sus recursos locales
 ├── Abrir Coach de Golf.bat       # Acceso directo para ejecutar la app en Windows con un clic
 ├── README.md                    # Documentación del proyecto
+├── assets/
+│   └── icons/                   # Íconos PNG para Android, iPhone y accesos directos
 ├── css/
 │   ├── style.css                # Sistema de diseño, tokens, paleta Augusta/Gold y dark mode
 │   └── components.css           # Componentes UI (Cards, Radar, Temporizador, Scorecard, Chat)
+├── database/
+│   ├── schema.sql               # Esquema PostgreSQL portable de referencia
+│   └── supabase/migrations/     # Esquema cloud con roles, RLS y autenticación preparada
 └── js/
-    ├── storage.js               # Persistencia de datos local en LocalStorage
+    ├── database.js              # Base local IndexedDB y tablas de datos estructurados
+    ├── storage.js               # Repositorio y caché de datos por golfista
+    ├── players.js               # Fichas de golfistas, hándicap y torneos
     ├── assessment.js            # Cuestionario diagnóstico 360° y cálculo del radar de habilidades
     ├── drills.js                # Catálogo de drills y temporizador Pomodoro de golf con audio
     ├── mental.js                # Animador de respiración táctica y rutina pre-golpe
     ├── tactics.js               # Caddy virtual, selector inteligente de palos y playbook de campo
     ├── rounds.js                # Scorecard interactivo de 9/18 hoyos y estadísticas avanzadas
     ├── mentor.js                # Chat interactivo con el Coach, metas SMART y diario del jugador
+    ├── pwa.js                   # Instalación, atajos y aviso de conectividad
     └── app.js                   # Controlador principal, cambio de temas y gestión de modales
 ```
 
@@ -47,3 +57,39 @@ coach-de-golf/
 5. **Calcular tu Palo con el Caddy**: En **Caddy & Estrategia**, ingresa la distancia láser y el viento para obtener la distancia efectiva y palo recomendado.
 6. **Registrar tus Rondas**: Tras jugar, ingresa a **Scorecard & Rondas** para cargar tus golpes, putts y calles acertadas.
 7. **Consultar al Mentor**: En **Mentoría & Metas**, haz preguntas al Coach Virtual para resolver dudas sobre tu swing y fijar tus metas de temporada.
+8. **Gestionar golfistas**: En **Golfistas & Datos**, crea una ficha por jugador, registra la evolución del hándicap y carga sus torneos. Cada ronda queda vinculada al golfista activo.
+
+## 📲 Instalarla en el celular
+
+La versión publicada en GitHub Pages es una aplicación web instalable. Abrila desde:
+
+<https://vitalcore-tienda.github.io/app-de-coach-de-golf/>
+
+- En Android (Chrome o Edge), tocá **Instalar** dentro de la app o usá el menú de tres puntos → **Instalar aplicación** / **Agregar a pantalla principal**.
+- En iPhone/iPad, abrila en Safari → **Compartir** → **Agregar a pantalla de inicio**.
+
+El ícono queda en el teléfono y la interfaz, las fichas ya abiertas y los recursos de la app quedan disponibles sin conexión. Los datos se guardan en el dispositivo mientras no haya una cuenta cloud conectada. El archivo `.bat` sirve para abrir una copia local en Windows, pero `file://` no permite instalarla ni activar el service worker; para esas funciones usá la URL HTTPS.
+
+---
+
+## 🗃️ Datos de golfistas
+
+La aplicación usa **IndexedDB** como base de datos local del navegador. Guarda:
+
+- Fichas de múltiples golfistas: datos de contacto, licencia, hándicap, club, lateralidad, experiencia y distancia de driver.
+- Historial de hándicap con fecha, origen y notas.
+- Torneos por jugador y rondas opcionalmente vinculadas a un torneo.
+- Rondas y sus 9/18 hoyos: golpes, par, putts, FIR, GIR, bunker y penalidades.
+
+La primera vez que se abre la versión nueva, los datos anteriores de LocalStorage se migran automáticamente. Como esta es una app estática, la base local se conserva en ese navegador y dispositivo.
+
+## 🔐 Cuentas compartidas y base cloud
+
+Para compartir una ficha entre entrenador y golfista, el diseño preparado usa Supabase Auth y PostgreSQL:
+
+- El entrenador crea la ficha y queda asignado automáticamente al jugador.
+- El golfista entra con un enlace de un solo uso enviado a su correo; al confirmar el mismo mail que figura en su ficha, queda vinculado a ella sin duplicar datos.
+- Las reglas RLS impiden que un golfista consulte a otros jugadores, y que un entrenador acceda a jugadores que no tiene asignados.
+- El rol de primer entrenador se protege con un código de configuración de una sola vez; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
+
+Las migraciones listas para aplicar están en [`database/supabase/migrations/202608210001_secure_coach_platform.sql`](database/supabase/migrations/202608210001_secure_coach_platform.sql) y [`database/supabase/migrations/202608210002_harden_initial_coach.sql`](database/supabase/migrations/202608210002_harden_initial_coach.sql). Antes de activar la sincronización cloud hay que aplicarlas en el proyecto de Supabase y configurar la URL de retorno de GitHub Pages en Auth. No subas nombres, teléfonos, correos ni claves de jugadores al repositorio: GitHub Pages es público.

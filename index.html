@@ -13,6 +13,8 @@
   <meta name="apple-mobile-web-app-title" content="GolfCoach">
   <meta name="theme-color" content="#061c11">
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
 
   <!-- Google Fonts: Outfit & Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -41,6 +43,10 @@
         <li class="nav-item active" data-view="dashboard">
           <span class="nav-icon">🏠</span>
           <span>Dashboard 360°</span>
+        </li>
+        <li class="nav-item" data-view="players">
+          <span class="nav-icon">👥</span>
+          <span>Golfistas & Datos</span>
         </li>
         <li class="nav-item" data-view="assessment">
           <span class="nav-icon">📋</span>
@@ -91,6 +97,9 @@
         </div>
 
         <div class="topbar-actions">
+          <button class="btn btn-secondary btn-sm pwa-install-button" id="install-app-btn" hidden onclick="PWAEngine.promptInstall()" title="Instalar GolfCoach">
+            📲 Instalar
+          </button>
           <button class="btn-icon" id="theme-toggle-btn" onclick="App.toggleTheme()" title="Cambiar tema claro/oscuro">
             ☀️
           </button>
@@ -108,7 +117,12 @@
         <div id="dashboard-container"></div>
       </section>
 
-      <!-- 2. Assessment View Panel -->
+      <!-- 2. Players & Database View Panel -->
+      <section class="view-panel" id="players-panel">
+        <div id="players-container"></div>
+      </section>
+
+      <!-- 3. Assessment View Panel -->
       <section class="view-panel" id="assessment-panel">
         <div id="assessment-container"></div>
       </section>
@@ -187,6 +201,10 @@
           <span class="nav-icon">🏠</span>
           <span>Dashboard 360°</span>
         </li>
+        <li class="nav-item" data-view="players" onclick="App.navigateTo('players'); App.closeMobileDrawer();">
+          <span class="nav-icon">👥</span>
+          <span>Golfistas & Datos</span>
+        </li>
         <li class="nav-item" data-view="assessment" onclick="App.navigateTo('assessment'); App.closeMobileDrawer();">
           <span class="nav-icon">📋</span>
           <span>Diagnóstico 360°</span>
@@ -236,13 +254,16 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts in dependency order -->
+  <script src="js/database.js"></script>
   <script src="js/storage.js"></script>
+  <script src="js/players.js"></script>
   <script src="js/assessment.js"></script>
   <script src="js/drills.js"></script>
   <script src="js/mental.js"></script>
   <script src="js/tactics.js"></script>
   <script src="js/rounds.js"></script>
   <script src="js/mentor.js"></script>
+  <script src="js/pwa.js"></script>
   <script src="js/app.js"></script>
 
 </body>

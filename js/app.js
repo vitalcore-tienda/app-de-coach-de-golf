@@ -7,13 +7,16 @@ class App {
   static currentView = 'dashboard';
   static currentTheme = 'dark';
 
-  static init() {
-    // 1. Setup Theme
+  static async init() {
+    // 1. Cargar la base local y migrar los datos que ya existían.
+    await StorageManager.initialize();
+
+    // 2. Setup Theme
     App.currentTheme = StorageManager.get(STORAGE_KEYS.THEME, 'dark');
     document.documentElement.setAttribute('data-theme', App.currentTheme);
     App.updateThemeIcon();
 
-    // 2. Setup Desktop Sidebar Navigation
+    // 3. Setup Desktop Sidebar Navigation
     document.querySelectorAll('.sidebar .nav-item').forEach(item => {
       item.addEventListener('click', () => {
         const targetView = item.getAttribute('data-view');
@@ -23,9 +26,16 @@ class App {
       });
     });
 
-    // 3. Render Initial Dashboard View & Player Profile
+    // 4. Render Initial Dashboard View & Player Profile
     App.updateProfileDisplay();
     App.renderDashboard();
+
+    // 5. Activar la experiencia instalable/offline una vez que la app ya
+    // está lista para mostrar sus avisos y abrir accesos directos de PWA.
+    if (window.PWAEngine) {
+      PWAEngine.init();
+      PWAEngine.handleLaunchShortcut();
+    }
   }
 
   static navigateTo(viewId) {
@@ -62,6 +72,7 @@ class App {
     // 4. Update Topbar Title
     const titles = {
       dashboard: 'Dashboard 360°',
+      players: 'Golfistas & Datos',
       assessment: 'Diagnóstico Integral 360°',
       drills: 'Planes de Entrenamiento & Drills',
       mental: 'Juego Mental & Rutina',
@@ -77,6 +88,7 @@ class App {
 
     // 5. Trigger Module Renderers
     if (viewId === 'dashboard') App.renderDashboard();
+    if (viewId === 'players' && window.PlayerEngine) PlayerEngine.renderPlayersView();
     if (viewId === 'assessment' && window.AssessmentEngine) AssessmentEngine.renderDiagnosticView();
     if (viewId === 'drills' && window.DrillsEngine) DrillsEngine.renderDrillsView();
     if (viewId === 'mental' && window.MentalEngine) MentalEngine.renderMentalView();
@@ -313,10 +325,21 @@ class App {
 
       <div class="form-group">
         <label class="form-label">Nombre Completo</label>
-        <input type="text" class="form-control" id="profile-name-input" value="${profile.name}">
+        <input type="text" class="form-control" id="profile-name-input" value="${App.escapeHTML(profile.name)}">
       </div>
 
       <div class="grid-2">
+        <div class="form-group">
+          <label class="form-label">Email</label>
+          <input type="email" class="form-control" id="profile-email-input" value="${App.escapeHTML(profile.email || '')}" placeholder="nombre@email.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Teléfono</label>
+          <input type="text" class="form-control" id="profile-phone-input" value="${App.escapeHTML(profile.phone || '')}" placeholder="Contacto">
+        </div>
+      </div>
+
+      <div class="grid-3">
         <div class="form-group">
           <label class="form-label">Hándicap Actual</label>
           <input type="number" step="0.1" class="form-control" id="profile-hcp-input" value="${profile.handicap}">
@@ -325,17 +348,44 @@ class App {
           <label class="form-label">Hándicap Objetivo</label>
           <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${profile.targetHandicap}">
         </div>
+        <div class="form-group">
+          <label class="form-label">Licencia Federativa</label>
+          <input type="text" class="form-control" id="profile-license-input" value="${App.escapeHTML(profile.federationLicense || '')}" placeholder="Opcional">
+        </div>
       </div>
 
       <div class="grid-2">
         <div class="form-group">
           <label class="form-label">Club Principal</label>
-          <input type="text" class="form-control" id="profile-club-input" value="${profile.homeClub}">
+          <input type="text" class="form-control" id="profile-club-input" value="${App.escapeHTML(profile.homeClub || '')}">
         </div>
         <div class="form-group">
           <label class="form-label">Carry Driver (m)</label>
           <input type="number" class="form-control" id="profile-driver-input" value="${profile.driverDistanceAvg}">
         </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="form-group">
+          <label class="form-label">Mano Dominante</label>
+          <select class="form-control" id="profile-hand-input">
+            <option ${profile.dominantHand === 'Diestro' ? 'selected' : ''}>Diestro</option>
+            <option ${profile.dominantHand === 'Zurdo' ? 'selected' : ''}>Zurdo</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Años de Experiencia</label>
+          <input type="number" min="0" class="form-control" id="profile-experience-input" value="${profile.experienceYears || 0}">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fecha de Nacimiento</label>
+          <input type="date" class="form-control" id="profile-birthdate-input" value="${App.escapeHTML(profile.birthDate || '')}">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Categoría / Nivel</label>
+        <input type="text" class="form-control" id="profile-category-input" value="${App.escapeHTML(profile.playerCategory || '')}" placeholder="Ej.: Amateur competitivo">
       </div>
 
       <div style="margin-top: 1.25rem;">
@@ -346,19 +396,41 @@ class App {
     App.openModal();
   }
 
-  static saveProfile() {
+  static async saveProfile() {
     const profile = StorageManager.getProfile();
     profile.name = document.getElementById('profile-name-input')?.value || profile.name;
+    profile.email = document.getElementById('profile-email-input')?.value || '';
+    profile.phone = document.getElementById('profile-phone-input')?.value || '';
     profile.handicap = parseFloat(document.getElementById('profile-hcp-input')?.value || profile.handicap);
     profile.targetHandicap = parseFloat(document.getElementById('profile-target-hcp-input')?.value || profile.targetHandicap);
+    profile.federationLicense = document.getElementById('profile-license-input')?.value || '';
     profile.homeClub = document.getElementById('profile-club-input')?.value || profile.homeClub;
     profile.driverDistanceAvg = parseInt(document.getElementById('profile-driver-input')?.value || profile.driverDistanceAvg);
+    profile.dominantHand = document.getElementById('profile-hand-input')?.value || profile.dominantHand;
+    profile.experienceYears = parseInt(document.getElementById('profile-experience-input')?.value || profile.experienceYears);
+    profile.birthDate = document.getElementById('profile-birthdate-input')?.value || '';
+    profile.playerCategory = document.getElementById('profile-category-input')?.value || profile.playerCategory;
 
-    StorageManager.saveProfile(profile);
-    App.updateProfileDisplay();
-    App.closeModal();
-    App.showToast('✅ Perfil actualizado.');
-    App.renderDashboard();
+    try {
+      await StorageManager.saveProfile(profile);
+      App.updateProfileDisplay();
+      App.closeModal();
+      App.showToast('✅ Perfil actualizado.');
+      App.renderDashboard();
+      if (App.currentView === 'players' && window.PlayerEngine) await PlayerEngine.renderPlayersView();
+    } catch (error) {
+      console.error('No se pudo actualizar el perfil:', error);
+      App.showToast('No se pudo actualizar el perfil.');
+    }
+  }
+
+  static escapeHTML(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
   }
 
   static openModal() {

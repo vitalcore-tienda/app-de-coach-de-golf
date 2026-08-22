@@ -1,0 +1,13 @@
+# Credenciales y configuración local: nunca publicar en GitHub Pages.
+.env
+.env.*
+!.env.example
+
+# Herramientas y sistema operativo.
+supabase/.temp/
+database/supabase/.temp/
+.DS_Store
+Thumbs.db
+
+# Fuente de diseño local; la PWA utiliza las variantes optimizadas de 32–512 px.
+assets/icons/golfcoach-icon-1024.png
