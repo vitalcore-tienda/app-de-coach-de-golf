@@ -29,6 +29,8 @@ coach-de-golf/
 ├── css/
 │   ├── style.css                # Sistema de diseño, tokens, paleta Augusta/Gold y dark mode
 │   └── components.css           # Componentes UI (Cards, Radar, Temporizador, Scorecard, Chat)
+├── vendor/
+│   └── supabase/                # Cliente oficial de Supabase fijado por versión y hash
 ├── database/
 │   ├── schema.sql               # Esquema PostgreSQL portable de referencia
 │   └── supabase/migrations/     # Esquema cloud con roles, RLS y autenticación preparada
@@ -43,6 +45,7 @@ coach-de-golf/
     ├── rounds.js                # Scorecard interactivo de 9/18 hoyos y estadísticas avanzadas
     ├── mentor.js                # Chat interactivo con el Coach, metas SMART y diario del jugador
     ├── pwa.js                   # Instalación, atajos y aviso de conectividad
+    ├── auth.js                  # Magic Link, sesión y activación del primer entrenador
     └── app.js                   # Controlador principal, cambio de temas y gestión de modales
 ```
 
@@ -91,5 +94,8 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 - El golfista entra con un enlace de un solo uso enviado a su correo; al confirmar el mismo mail que figura en su ficha, queda vinculado a ella sin duplicar datos.
 - Las reglas RLS impiden que un golfista consulte a otros jugadores, y que un entrenador acceda a jugadores que no tiene asignados.
 - El rol de primer entrenador se protege con un código de configuración de una sola vez; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
+- El acceso se abre desde el ícono ✉️ de la barra superior. No utiliza contraseña: Supabase envía un Magic Link y la app conserva la sesión del dispositivo mediante su cliente oficial versionado localmente.
 
-Las migraciones listas para aplicar están en [`database/supabase/migrations/202608210001_secure_coach_platform.sql`](database/supabase/migrations/202608210001_secure_coach_platform.sql) y [`database/supabase/migrations/202608210002_harden_initial_coach.sql`](database/supabase/migrations/202608210002_harden_initial_coach.sql). Antes de activar la sincronización cloud hay que aplicarlas en el proyecto de Supabase y configurar la URL de retorno de GitHub Pages en Auth. No subas nombres, teléfonos, correos ni claves de jugadores al repositorio: GitHub Pages es público.
+Las migraciones listas para aplicar están en [`database/supabase/migrations/202608210001_secure_coach_platform.sql`](database/supabase/migrations/202608210001_secure_coach_platform.sql) y [`database/supabase/migrations/202608210002_harden_initial_coach.sql`](database/supabase/migrations/202608210002_harden_initial_coach.sql). Antes de usar el acceso por email, configurá en Supabase Auth como Site URL y Redirect URL `https://vitalcore-tienda.github.io/app-de-coach-de-golf/`. Después, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
+
+La autenticación ya está separada de los datos locales: iniciar sesión no sube ni expone automáticamente las fichas existentes en IndexedDB. La sincronización cloud se activará en una etapa posterior, siempre protegida por RLS. No subas nombres, teléfonos, correos, códigos de activación ni claves administrativas al repositorio: GitHub Pages es público.

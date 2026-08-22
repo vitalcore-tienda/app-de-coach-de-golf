@@ -1,0 +1,2 @@
+# Dependencia de terceros versionada; revisar por versión y hash, no como diff generado.
+vendor/supabase/supabase-js-2.112.3.js -diff

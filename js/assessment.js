@@ -201,6 +201,33 @@ class AssessmentEngine {
     this.userAnswers = {};
   }
 
+  // Assessments can be restored from older local records or imported data.
+  // Keep chart coordinates and report ordering strictly numeric and bounded.
+  static normalizeScore(value, fallback = 50) {
+    const numericValue = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN;
+
+    if (!Number.isFinite(numericValue)) return fallback;
+    return Math.min(100, Math.max(0, numericValue));
+  }
+
+  static normalizeScores(scores) {
+    const source = scores && typeof scores === 'object' && !Array.isArray(scores)
+      ? scores
+      : {};
+
+    return {
+      swing: AssessmentEngine.normalizeScore(source.swing),
+      shortGame: AssessmentEngine.normalizeScore(source.shortGame),
+      strategy: AssessmentEngine.normalizeScore(source.strategy),
+      mental: AssessmentEngine.normalizeScore(source.mental),
+      fitness: AssessmentEngine.normalizeScore(source.fitness)
+    };
+  }
+
   static renderDiagnosticView() {
     const container = document.getElementById('assessment-container');
     if (!container) return;
@@ -254,13 +281,15 @@ class AssessmentEngine {
   }
 
   static generateRadarSVG(scores) {
+    const normalizedScores = AssessmentEngine.normalizeScores(scores);
+
     // 5 pillars: swing, shortGame, strategy, mental, fitness
     const pillars = [
-      { key: 'swing', label: 'Swing', val: scores.swing || 50 },
-      { key: 'shortGame', label: 'Juego Corto', val: scores.shortGame || 50 },
-      { key: 'strategy', label: 'Estrategia', val: scores.strategy || 50 },
-      { key: 'mental', label: 'Mente', val: scores.mental || 50 },
-      { key: 'fitness', label: 'Físico', val: scores.fitness || 50 }
+      { key: 'swing', label: 'Swing', val: normalizedScores.swing },
+      { key: 'shortGame', label: 'Juego Corto', val: normalizedScores.shortGame },
+      { key: 'strategy', label: 'Estrategia', val: normalizedScores.strategy },
+      { key: 'mental', label: 'Mente', val: normalizedScores.mental },
+      { key: 'fitness', label: 'Físico', val: normalizedScores.fitness }
     ];
 
     const size = 260;
@@ -316,15 +345,22 @@ class AssessmentEngine {
   }
 
   static generateReportHTML(scores) {
-    const avg = Math.round((scores.swing + scores.shortGame + scores.strategy + scores.mental + scores.fitness) / 5);
+    const normalizedScores = AssessmentEngine.normalizeScores(scores);
+    const avg = Math.round((
+      normalizedScores.swing +
+      normalizedScores.shortGame +
+      normalizedScores.strategy +
+      normalizedScores.mental +
+      normalizedScores.fitness
+    ) / 5);
     
     // Determine weakest and strongest pillars
     const pillars = [
-      { name: 'Mecánica de Swing', val: scores.swing, cat: 'swing' },
-      { name: 'Juego Corto (Putt/Chip/Bunker)', val: scores.shortGame, cat: 'shortGame' },
-      { name: 'Estrategia de Campo', val: scores.strategy, cat: 'strategy' },
-      { name: 'Juego Mental & Rutina', val: scores.mental, cat: 'mental' },
-      { name: 'Físico & Flexibilidad', val: scores.fitness, cat: 'fitness' }
+      { name: 'Mecánica de Swing', val: normalizedScores.swing, cat: 'swing' },
+      { name: 'Juego Corto (Putt/Chip/Bunker)', val: normalizedScores.shortGame, cat: 'shortGame' },
+      { name: 'Estrategia de Campo', val: normalizedScores.strategy, cat: 'strategy' },
+      { name: 'Juego Mental & Rutina', val: normalizedScores.mental, cat: 'mental' },
+      { name: 'Físico & Flexibilidad', val: normalizedScores.fitness, cat: 'fitness' }
     ].sort((a, b) => a.val - b.val);
 
     const weakest = pillars[0];
