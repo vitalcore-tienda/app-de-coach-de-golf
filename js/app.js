@@ -45,6 +45,14 @@ class App {
   }
 
   static navigateTo(viewId) {
+    // Las cuentas de golfista tienen una única experiencia enfocada. Aunque
+    // algún atajo antiguo intente abrir una vista del entrenador, se mantiene
+    // el portal activo (la seguridad de los datos también se aplica con RLS).
+    if (window.PlayerPortal?.active && viewId !== 'player-portal') {
+      PlayerPortal.activate();
+      return;
+    }
+
     App.currentView = viewId;
 
     // 1. Update Desktop Sidebar Active Class
@@ -84,7 +92,8 @@ class App {
       mental: 'Juego Mental & Rutina',
       tactics: 'Caddy Táctico & Estrategia',
       rounds: 'Scorecard & Estadísticas',
-      mentor: 'Centro de Mentoría & Metas'
+      mentor: 'Centro de Mentoría & Metas',
+      'player-portal': 'Mi golf'
     };
 
     const titleEl = document.getElementById('current-page-title');
