@@ -12,7 +12,7 @@ class App {
     await StorageManager.initialize();
 
     // 1.1 Restaurar la sesión cloud sin bloquear el modo local/offline.
-    // AuthEngine gestiona una identidad de cuenta, no el perfil local del golfista.
+    // El respaldo se activa explícitamente desde CloudSync y nunca impide usar la app.
     if (window.AuthEngine) {
       AuthEngine.init().catch(error => console.warn('No se pudo iniciar el acceso cloud:', error));
     }

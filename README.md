@@ -71,7 +71,7 @@ La versión publicada en GitHub Pages es una aplicación web instalable. Abrila 
 - En Android (Chrome o Edge), tocá **Instalar** dentro de la app o usá el menú de tres puntos → **Instalar aplicación** / **Agregar a pantalla principal**.
 - En iPhone/iPad, abrila en Safari → **Compartir** → **Agregar a pantalla de inicio**.
 
-El ícono queda en el teléfono y la interfaz, las fichas ya abiertas y los recursos de la app quedan disponibles sin conexión. Los datos se guardan en el dispositivo mientras no haya una cuenta cloud conectada. El archivo `.bat` sirve para abrir una copia local en Windows, pero `file://` no permite instalarla ni activar el service worker; para esas funciones usá la URL HTTPS.
+El ícono queda en el teléfono y la interfaz, las fichas ya abiertas y los recursos de la app quedan disponibles sin conexión. El archivo `.bat` sirve para abrir una copia local en Windows, pero `file://` no permite instalarla ni activar el service worker; para esas funciones usá la URL HTTPS.
 
 ---
 
@@ -84,7 +84,7 @@ La aplicación usa **IndexedDB** como base de datos local del navegador. Guarda:
 - Torneos por jugador y rondas opcionalmente vinculadas a un torneo.
 - Rondas y sus 9/18 hoyos: golpes, par, putts, FIR, GIR, bunker y penalidades.
 
-La primera vez que se abre la versión nueva, los datos anteriores de LocalStorage se migran automáticamente. Como esta es una app estática, la base local se conserva en ese navegador y dispositivo.
+La primera vez que se abre la versión nueva, los datos anteriores de LocalStorage se migran automáticamente. Como respaldo, el entrenador puede activar la sincronización cloud desde el ícono ☁️: la app sigue guardando primero en IndexedDB y conserva una cola para reintentar cuando vuelva la conexión.
 
 ## 🔐 Cuentas compartidas y base cloud
 
@@ -96,6 +96,8 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 - El rol de primer entrenador se protege con un código de configuración de una sola vez; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
 - El acceso se abre desde el ícono ✉️ de la barra superior. No utiliza contraseña: Supabase envía un Magic Link y la app conserva la sesión del dispositivo mediante su cliente oficial versionado localmente.
 
-Las migraciones listas para aplicar están en [`database/supabase/migrations/202608210001_secure_coach_platform.sql`](database/supabase/migrations/202608210001_secure_coach_platform.sql) y [`database/supabase/migrations/202608210002_harden_initial_coach.sql`](database/supabase/migrations/202608210002_harden_initial_coach.sql). Antes de usar el acceso por email, configurá en Supabase Auth como Site URL y Redirect URL `https://vitalcore-tienda.github.io/app-de-coach-de-golf/`. Después, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
+Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabase/migrations`](database/supabase/migrations): estructura, endurecimiento del primer entrenador, seguridad adicional e índices. El proyecto de Supabase debe ser exclusivo de GolfCoach; no se deben aplicar estas migraciones a otras apps de VitalCore. En Supabase Auth, Site URL y Redirect URL deben ser exactamente `https://vitalcore-tienda.github.io/app-de-coach-de-golf/`.
 
-La autenticación ya está separada de los datos locales: iniciar sesión no sube ni expone automáticamente las fichas existentes en IndexedDB. La sincronización cloud se activará en una etapa posterior, siempre protegida por RLS. No subas nombres, teléfonos, correos, códigos de activación ni claves administrativas al repositorio: GitHub Pages es público.
+Después de publicar esta versión, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. Al activarse, toca ☁️ y elige **Activar respaldo y sincronizar** para realizar la primera carga explícita de las fichas que ya están en ese dispositivo. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
+
+No subas nombres, teléfonos, correos, códigos de activación ni claves administrativas al repositorio: GitHub Pages es público. La app usa solamente una publishable key en el navegador; las políticas RLS de PostgreSQL autorizan cada dato en el servidor.

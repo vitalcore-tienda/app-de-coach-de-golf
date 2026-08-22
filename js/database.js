@@ -9,7 +9,7 @@
 
 const GOLF_DATABASE = {
   NAME: 'GolfCoachProDB',
-  VERSION: 1,
+  VERSION: 2,
   STORES: {
     PLAYERS: 'players',
     HANDICAP_HISTORY: 'handicapHistory',
@@ -18,7 +18,8 @@ const GOLF_DATABASE = {
     ROUND_HOLES: 'roundHoles',
     SHOT_LOGS: 'shotLogs',
     PLAYER_DATA: 'playerData',
-    SETTINGS: 'settings'
+    SETTINGS: 'settings',
+    SYNC_OUTBOX: 'syncOutbox'
   }
 };
 
@@ -97,6 +98,13 @@ class GolfDatabase {
 
         if (!db.objectStoreNames.contains(stores.SETTINGS)) {
           db.createObjectStore(stores.SETTINGS, { keyPath: 'id' });
+        }
+
+        if (!db.objectStoreNames.contains(stores.SYNC_OUTBOX)) {
+          const syncOutbox = db.createObjectStore(stores.SYNC_OUTBOX, { keyPath: 'id' });
+          syncOutbox.createIndex('ownerId', 'ownerId', { unique: false });
+          syncOutbox.createIndex('playerId', 'playerId', { unique: false });
+          syncOutbox.createIndex('updatedAt', 'updatedAt', { unique: false });
         }
       };
 

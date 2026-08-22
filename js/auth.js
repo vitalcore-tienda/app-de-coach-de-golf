@@ -1,16 +1,15 @@
 /**
  * GolfCoach Pro - acceso por correo con Supabase Auth.
  *
- * Esta capa sólo gestiona identidad y rol remoto. El modo local de IndexedDB
- * sigue funcionando sin conexión y no se mezcla con la identidad de un
- * golfista hasta que exista una sincronización cloud explícita.
+ * Esta capa gestiona identidad y rol remoto. El modo local de IndexedDB sigue
+ * funcionando sin conexión; el respaldo cloud es siempre explícito y usa RLS.
  */
 
 class AuthEngine {
-  static supabaseUrl = 'https://kesbwmurxuncddirlbyt.supabase.co';
+  static supabaseUrl = 'https://qfcvoenhnxxonemqsvmy.supabase.co';
   // Las publishable keys son deliberadamente públicas: RLS protege los datos.
   // Nunca agregar aquí una service_role o una clave secreta.
-  static publishableKey = 'sb_publishable_jIPYKOKfM6MXj1_WZGuAIw_3sepLmiK';
+  static publishableKey = 'sb_publishable_rpsQPcuk_QFHef8manp3WQ_LHB3Nd4M';
   static redirectUrl = 'https://vitalcore-tienda.github.io/app-de-coach-de-golf/';
 
   static client = null;
@@ -43,7 +42,7 @@ class AuthEngine {
           autoRefreshToken: true,
           persistSession: true,
           detectSessionInUrl: true,
-          storageKey: 'golfcoach-pro-auth-v1'
+          storageKey: 'golfcoach-pro-auth-qfcvoenhnxxonemqsvmy-v1'
         }
       }
     );
@@ -56,12 +55,13 @@ class AuthEngine {
 
     try {
       await AuthEngine.refreshIdentity();
-      AuthEngine.clearAuthCallbackArtifacts();
+      if (AuthEngine.user) AuthEngine.clearAuthCallbackArtifacts();
     } catch (error) {
       console.warn('No se pudo restaurar la sesión cloud:', error);
     }
 
     AuthEngine.updateAccessButton();
+    window.CloudSync?.onAuthStateChanged?.();
   }
 
   static async handleAuthEvent(event, session) {
@@ -74,7 +74,8 @@ class AuthEngine {
 
     try {
       await AuthEngine.refreshIdentity();
-      AuthEngine.clearAuthCallbackArtifacts();
+      if (AuthEngine.user) AuthEngine.clearAuthCallbackArtifacts();
+      await window.CloudSync?.onAuthStateChanged?.();
       if (event === 'SIGNED_IN') {
         AuthEngine.toast('✅ Sesión iniciada.');
       }
@@ -143,6 +144,7 @@ class AuthEngine {
   }
 
   static clearAuthCallbackArtifacts() {
+    if (!AuthEngine.user) return;
     const url = new URL(window.location.href);
     const hash = new URLSearchParams(url.hash.slice(1));
     const callbackKeys = [
@@ -173,25 +175,25 @@ class AuthEngine {
 
   static updateAccessButton() {
     const button = document.getElementById('auth-access-btn');
-    if (!button) return;
+    if (!button) {
+      window.CloudSync?.updateButton?.();
+      return;
+    }
 
     if (!AuthEngine.client) {
       button.textContent = '✉️';
       button.title = 'El acceso por email no está disponible ahora';
       button.setAttribute('aria-label', button.title);
-      return;
-    }
-
-    if (AuthEngine.user) {
+    } else if (AuthEngine.user) {
       button.textContent = AuthEngine.isCoach() ? '👤' : '✉️';
       button.title = `${AuthEngine.roleLabel()}: abrir cuenta`;
       button.setAttribute('aria-label', button.title);
-      return;
+    } else {
+      button.textContent = '✉️';
+      button.title = 'Acceder por email';
+      button.setAttribute('aria-label', button.title);
     }
-
-    button.textContent = '✉️';
-    button.title = 'Acceder por email';
-    button.setAttribute('aria-label', button.title);
+    window.CloudSync?.updateButton?.();
   }
 
   static async openAccessModal() {
@@ -235,7 +237,7 @@ class AuthEngine {
       <div id="auth-status" role="status" aria-live="polite" style="min-height:1.25rem; font-size:0.84rem; color:var(--text-muted);"></div>
       <button class="btn btn-primary" id="auth-send-link-btn" style="width:100%; min-height:46px; margin-top:1rem;" onclick="AuthEngine.sendMagicLink()">Enviar enlace de acceso</button>
       <div class="offline-info-card" style="margin-top:1rem;">
-        <span>🔐</span><span>El acceso protege la cuenta cloud. Las fichas guardadas sólo en este navegador siguen locales hasta que se active la sincronización.</span>
+        <span>🔐</span><span>El acceso protege la cuenta cloud. El entrenador puede activar el respaldo desde el ícono ☁️ cuando lo necesite.</span>
       </div>
     `);
 
@@ -265,6 +267,9 @@ class AuthEngine {
       ` : ''}
       ${!AuthEngine.isCoach() && !profilePending ? `
         <button class="btn btn-secondary" style="width:100%; min-height:44px; margin-top:1rem;" onclick="AuthEngine.showInitialCoachCodeForm()">Tengo el código del primer entrenador</button>
+      ` : ''}
+      ${AuthEngine.isCoach() ? `
+        <button class="btn btn-secondary" style="width:100%; min-height:44px; margin-top:1rem;" onclick="CloudSync.openSyncModal()">☁️ Respaldo y sincronización cloud</button>
       ` : ''}
       <button class="btn btn-primary" style="width:100%; min-height:44px; margin-top:0.75rem;" onclick="AuthEngine.signOut()">Cerrar sesión en este dispositivo</button>
     `);
@@ -376,6 +381,7 @@ class AuthEngine {
 
       if (input) input.value = '';
       AuthEngine.renderSignedInModal();
+      await window.CloudSync?.onAuthStateChanged?.();
       AuthEngine.toast('🏌️ Cuenta de entrenador activada.');
     } catch (error) {
       // Nunca mostrar ni registrar el código introducido.
