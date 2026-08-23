@@ -18,6 +18,7 @@ class AuthEngine {
   static profile = null;
   static initialized = false;
   static initPromise = null;
+  static retryPromise = null;
 
   static init() {
     if (!AuthEngine.initPromise) {
@@ -53,6 +54,11 @@ class AuthEngine {
     AuthEngine.client.auth.onAuthStateChange((event, session) => {
       window.setTimeout(() => AuthEngine.handleAuthEvent(event, session), 0);
     });
+    window.addEventListener('online', () => {
+      if (AuthEngine.user) {
+        AuthEngine.retryIdentity({ silent: true });
+      }
+    }, { passive: true });
 
     try {
       await AuthEngine.refreshIdentity();
@@ -86,6 +92,7 @@ class AuthEngine {
     } catch (error) {
       console.warn('No se pudo actualizar la sesión cloud:', error);
       AuthEngine.updateAccessButton();
+      await window.PlayerPortal?.onAuthStateChanged?.();
     }
   }
 
@@ -119,7 +126,11 @@ class AuthEngine {
     const { data: userData, error: userError } = await AuthEngine.client.auth.getUser();
     if (userError || !userData?.user) {
       if (AuthEngine.isNetworkError(userError)) {
-        AuthEngine.user = session.user || AuthEngine.user;
+        const localUser = session.user || AuthEngine.user;
+        if (AuthEngine.profile?.id !== localUser?.id) {
+          AuthEngine.profile = await AuthEngine.readCachedProfile(localUser?.id);
+        }
+        AuthEngine.user = localUser;
         AuthEngine.updateAccessButton();
         return;
       }
@@ -139,13 +150,49 @@ class AuthEngine {
 
     if (profileError) {
       console.warn('No se pudo leer el perfil cloud:', profileError);
-      AuthEngine.profile = null;
+      AuthEngine.profile = await AuthEngine.readCachedProfile(userData.user.id);
     } else {
       AuthEngine.profile = profile || null;
       await AuthEngine.saveCachedProfile(AuthEngine.profile);
     }
 
     AuthEngine.updateAccessButton();
+  }
+
+  static retryIdentity({ silent = false } = {}) {
+    if (!AuthEngine.client) return Promise.resolve();
+    if (AuthEngine.retryPromise) return AuthEngine.retryPromise;
+
+    const button = document.getElementById('auth-retry-identity-btn');
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Verificando…';
+    }
+
+    const retry = (async () => {
+      try {
+        await AuthEngine.refreshIdentity();
+        await window.CloudSync?.onAuthStateChanged?.();
+        await window.PlayerPortal?.onAuthStateChanged?.();
+        if (!silent && AuthEngine.user && !AuthEngine.profile) {
+          AuthEngine.toast('No pudimos confirmar el tipo de cuenta. Revisá tu conexión y reintentá.');
+        }
+      } catch (error) {
+        console.warn('No se pudo reintentar la validación de la cuenta:', error);
+        await window.PlayerPortal?.onAuthStateChanged?.();
+        if (!silent) AuthEngine.toast('No se pudo verificar la cuenta en este momento.');
+      }
+    })();
+
+    AuthEngine.retryPromise = retry.finally(() => {
+      AuthEngine.retryPromise = null;
+      const currentButton = document.getElementById('auth-retry-identity-btn');
+      if (currentButton) {
+        currentButton.disabled = false;
+        currentButton.textContent = 'Reintentar verificación';
+      }
+    });
+    return AuthEngine.retryPromise;
   }
 
   static clearAuthCallbackArtifacts() {
@@ -207,6 +254,7 @@ class AuthEngine {
 
   static updateAccessButton() {
     const button = document.getElementById('auth-access-btn');
+    window.App?.updateWorkspaceContext?.();
     if (!button) {
       window.CloudSync?.updateButton?.();
       return;

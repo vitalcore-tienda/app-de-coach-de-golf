@@ -151,6 +151,13 @@ class PWAEngine {
       App.navigateTo('players');
     }
     if (action === 'new-round') {
+      const authenticatedWithoutCoachRole = Boolean(
+        window.AuthEngine?.user && !window.AuthEngine?.isCoach?.()
+      );
+      if (window.PlayerPortal?.active || authenticatedWithoutCoachRole) {
+        PWAEngine.showToast('La carga de rondas está disponible sólo para el entrenador.');
+        return;
+      }
       window.setTimeout(() => RoundsEngine.openNewRoundModal(), 120);
     }
   }

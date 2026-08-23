@@ -12,18 +12,59 @@ class PlayerPortal {
   static data = null;
   static loadPromise = null;
   static coachContext = null;
+  static identityKey = null;
+  static loadGeneration = 0;
 
   static isPlayerAccount() {
     return Boolean(AuthEngine.user?.id && AuthEngine.profile?.account_role === 'player');
+  }
+
+  static isIdentityPending() {
+    return Boolean(AuthEngine.user?.id && !AuthEngine.profile);
   }
 
   static cacheId(userId = AuthEngine.user?.id) {
     return `${PlayerPortal.CACHE_PREFIX}${userId || 'unknown'}`;
   }
 
+  static syncIdentityContext() {
+    const userId = AuthEngine.user?.id || null;
+    const role = AuthEngine.profile?.account_role || (userId ? 'pending' : 'anonymous');
+    const identityKey = `${userId || 'anonymous'}:${role}`;
+    if (identityKey !== PlayerPortal.identityKey) {
+      PlayerPortal.identityKey = identityKey;
+      PlayerPortal.loadGeneration += 1;
+      PlayerPortal.loadPromise = null;
+      PlayerPortal.data = null;
+    }
+    return { userId, generation: PlayerPortal.loadGeneration };
+  }
+
+  static isCurrentLoad({ userId, generation }) {
+    return Boolean(
+      PlayerPortal.isPlayerAccount()
+      && AuthEngine.user?.id === userId
+      && PlayerPortal.loadGeneration === generation
+    );
+  }
+
+  static closeCoachOverlays() {
+    document.getElementById('global-modal')?.classList.remove('active');
+    document.getElementById('mobile-drawer-overlay')?.classList.remove('active');
+  }
+
   static async onAuthStateChanged() {
+    const identityContext = PlayerPortal.syncIdentityContext();
     if (PlayerPortal.isPlayerAccount()) {
-      await PlayerPortal.activate();
+      PlayerPortal.activate(identityContext);
+      return;
+    }
+
+    // Una sesión autenticada sin rol confirmado nunca recibe por descarte el
+    // workspace del entrenador. RLS protege la nube y este estado neutral evita
+    // exponer también las fichas locales del dispositivo.
+    if (PlayerPortal.isIdentityPending()) {
+      PlayerPortal.activateIdentityPending();
       return;
     }
 
@@ -33,15 +74,48 @@ class PlayerPortal {
     }
   }
 
-  static async activate() {
+  static activate(identityContext = PlayerPortal.syncIdentityContext()) {
     PlayerPortal.active = true;
+    PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
     document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
     document.getElementById('player-portal-panel')?.classList.add('active');
     const title = document.getElementById('current-page-title');
     if (title) title.textContent = 'Mi golf';
     PlayerPortal.renderLoading();
-    await PlayerPortal.load();
+    PlayerPortal.load({ identityContext }).catch((error) => {
+      console.warn('No se pudo preparar el portal del golfista:', error);
+    });
+  }
+
+  static activateIdentityPending() {
+    PlayerPortal.active = true;
+    PlayerPortal.data = null;
+    PlayerPortal.loadPromise = null;
+    PlayerPortal.closeCoachOverlays();
+    document.body.classList.add('player-portal-active');
+    document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
+    document.getElementById('player-portal-panel')?.classList.add('active');
+    const title = document.getElementById('current-page-title');
+    if (title) title.textContent = 'Verificando cuenta';
+    PlayerPortal.renderIdentityPending();
+  }
+
+  static renderIdentityPending() {
+    const container = document.getElementById('player-portal-container');
+    if (!container) return;
+    container.innerHTML = `
+      <div class="card portal-account-pending">
+        <div class="card-icon">🔐</div>
+        <span class="badge badge-gold">Verificación segura</span>
+        <h2 style="margin-top:0.75rem;">Estamos confirmando tu tipo de cuenta</h2>
+        <p style="margin-top:0.55rem;">Mientras no podamos confirmar si esta cuenta pertenece a un entrenador o a un golfista, las fichas privadas de este dispositivo permanecerán ocultas.</p>
+        <div style="display:flex; gap:0.65rem; justify-content:center; flex-wrap:wrap; margin-top:1.25rem;">
+          <button class="btn btn-primary" id="auth-retry-identity-btn" onclick="AuthEngine.retryIdentity()">Reintentar verificación</button>
+          <button class="btn btn-secondary" onclick="AuthEngine.openAccessModal()">Opciones de cuenta</button>
+        </div>
+      </div>
+    `;
   }
 
   static deactivate() {
@@ -68,31 +142,47 @@ class PlayerPortal {
     `;
   }
 
-  static async load({ force = false } = {}) {
+  static async load({ force = false, identityContext = null } = {}) {
     if (!PlayerPortal.isPlayerAccount()) return;
     if (PlayerPortal.loadPromise && !force) return PlayerPortal.loadPromise;
 
-    PlayerPortal.loadPromise = PlayerPortal.performLoad()
+    if (force) {
+      PlayerPortal.loadGeneration += 1;
+      PlayerPortal.loadPromise = null;
+    }
+    const context = identityContext || {
+      userId: AuthEngine.user?.id || null,
+      generation: PlayerPortal.loadGeneration
+    };
+
+    const loadPromise = PlayerPortal.performLoad(context)
       .finally(() => {
-        PlayerPortal.loadPromise = null;
+        if (PlayerPortal.loadPromise === loadPromise) PlayerPortal.loadPromise = null;
       });
-    return PlayerPortal.loadPromise;
+    PlayerPortal.loadPromise = loadPromise;
+    return loadPromise;
   }
 
-  static async performLoad() {
+  static async performLoad(context) {
     try {
       if (navigator.onLine === false) {
-        const cached = await PlayerPortal.readCache();
+        const cached = await PlayerPortal.readCache(context.userId);
+        if (!PlayerPortal.isCurrentLoad(context)) return;
         if (!cached) throw new Error('offline-without-cache');
         PlayerPortal.data = { ...cached, fromCache: true };
       } else {
-        PlayerPortal.data = await PlayerPortal.fetchCloudData();
-        await PlayerPortal.saveCache(PlayerPortal.data);
+        const cloudData = await PlayerPortal.fetchCloudData();
+        if (!PlayerPortal.isCurrentLoad(context)) return;
+        await PlayerPortal.saveCache(cloudData, context.userId);
+        if (!PlayerPortal.isCurrentLoad(context)) return;
+        PlayerPortal.data = cloudData;
       }
       PlayerPortal.render();
     } catch (error) {
+      if (!PlayerPortal.isCurrentLoad(context)) return;
       console.warn('No se pudo cargar el portal del golfista:', error);
-      const cached = await PlayerPortal.readCache();
+      const cached = await PlayerPortal.readCache(context.userId);
+      if (!PlayerPortal.isCurrentLoad(context)) return;
       if (cached) {
         PlayerPortal.data = { ...cached, fromCache: true };
         PlayerPortal.render();
@@ -188,11 +278,11 @@ class PlayerPortal {
     return Boolean(value && typeof value === 'object' && !Array.isArray(value));
   }
 
-  static async saveCache(data) {
-    if (!AuthEngine.user?.id || !window.GolfDatabase?.isAvailable || !data) return;
+  static async saveCache(data, userId = AuthEngine.user?.id) {
+    if (!userId || !window.GolfDatabase?.isAvailable || !data) return;
     try {
       await GolfDatabase.put(GOLF_DATABASE.STORES.SETTINGS, {
-        id: PlayerPortal.cacheId(),
+        id: PlayerPortal.cacheId(userId),
         value: data,
         updatedAt: new Date().toISOString()
       });
@@ -201,10 +291,10 @@ class PlayerPortal {
     }
   }
 
-  static async readCache() {
-    if (!AuthEngine.user?.id || !window.GolfDatabase?.isAvailable) return null;
+  static async readCache(userId = AuthEngine.user?.id) {
+    if (!userId || !window.GolfDatabase?.isAvailable) return null;
     try {
-      const cached = await GolfDatabase.get(GOLF_DATABASE.STORES.SETTINGS, PlayerPortal.cacheId());
+      const cached = await GolfDatabase.get(GOLF_DATABASE.STORES.SETTINGS, PlayerPortal.cacheId(userId));
       return cached?.value || null;
     } catch (error) {
       return null;
@@ -213,7 +303,7 @@ class PlayerPortal {
 
   static render() {
     const container = document.getElementById('player-portal-container');
-    if (!container || !PlayerPortal.active || !PlayerPortal.data) return;
+    if (!container || !PlayerPortal.active || !PlayerPortal.isPlayerAccount() || !PlayerPortal.data) return;
 
     const data = PlayerPortal.data;
     if (!data.player) {
@@ -510,6 +600,10 @@ class PlayerPortal {
   }
 
   static async refresh() {
+    if (!PlayerPortal.isPlayerAccount()) {
+      if (PlayerPortal.isIdentityPending()) PlayerPortal.renderIdentityPending();
+      return;
+    }
     if (navigator.onLine === false) {
       App.showToast('Necesitás conexión para actualizar. Seguís viendo la última versión guardada.');
       return;
@@ -851,7 +945,7 @@ class PlayerPortal {
 }
 
 window.addEventListener('online', () => {
-  if (PlayerPortal.active) PlayerPortal.refresh().catch(() => {});
+  if (PlayerPortal.active && PlayerPortal.isPlayerAccount()) PlayerPortal.refresh().catch(() => {});
 });
 
 window.PlayerPortal = PlayerPortal;

@@ -8,6 +8,7 @@ class RoundsEngine {
   static activeMobileHole = 0;
   static scorecardMode = 'mobile'; // 'mobile' (stepper) or 'table'
   static holeData = [];
+  static roundPlayerContext = null;
 
   static initHoleData(count = 18) {
     RoundsEngine.currentHoleCount = count;
@@ -40,13 +41,16 @@ class RoundsEngine {
     }
 
     const rounds = StorageManager.getRounds();
+    const profile = StorageManager.getProfile();
+    const playerName = RoundsEngine.escapeHTML(profile?.name || 'Golfista');
 
     container.innerHTML = `
       <div class="card card-gold-glow" style="margin-bottom: 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
           <div>
-            <h2>Scorecard & Estadísticas de Rondas</h2>
-            <p>Registra tus vueltas con facilidad en el campo con botones táctiles rápidos.</p>
+            <span class="badge badge-gold" style="margin-bottom: 0.35rem;">Golfista seleccionado</span>
+            <h2>Rondas de ${playerName}</h2>
+            <p>Estadísticas y scorecards asociados a la ficha que estás viendo.</p>
           </div>
           <div style="display: flex; gap: 0.5rem; width: 100%; justify-content: flex-end;">
             <button class="btn btn-primary" style="flex: 1; max-width: 240px;" onclick="RoundsEngine.openNewRoundModal()">
@@ -234,26 +238,59 @@ class RoundsEngine {
   }
 
   static async openNewRoundModal() {
+    const authenticatedWithoutCoachRole = Boolean(
+      window.AuthEngine?.user && !window.AuthEngine?.isCoach?.()
+    );
+    if (window.PlayerPortal?.active || authenticatedWithoutCoachRole) {
+      App.showToast('Registrar rondas está disponible únicamente en el panel del entrenador.');
+      return;
+    }
+
     RoundsEngine.initHoleData(18);
     const modal = document.getElementById('global-modal');
     const modalContent = document.getElementById('global-modal-content');
     if (!modal || !modalContent) return;
+    const playerId = StorageManager.getActivePlayerId();
+    const profile = StorageManager.getProfile();
+    const playerName = RoundsEngine.escapeHTML(profile?.name || 'Golfista');
+
+    if (!playerId) {
+      App.showToast('Primero seleccioná un golfista.');
+      return;
+    }
 
     let tournaments = [];
     try {
-      tournaments = await StorageManager.getTournaments();
+      tournaments = await StorageManager.getTournaments(playerId);
     } catch (error) {
       console.warn('No se pudieron cargar los torneos para la ronda:', error);
     }
+
+    // El nombre visible y el destino real deben pertenecer siempre a la misma
+    // ficha, incluso si el entrenador cambia de golfista durante esta carga.
+    if (StorageManager.getActivePlayerId() !== playerId) {
+      App.showToast('Cambiaste de golfista. Abrí nuevamente la ronda para continuar.');
+      return;
+    }
+    RoundsEngine.roundPlayerContext = {
+      playerId,
+      playerName: String(profile?.name || 'Golfista'),
+      accountUserId: window.AuthEngine?.user?.id || null
+    };
 
     modalContent.innerHTML = `
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
         <div>
-          <span class="badge badge-gold" style="margin-bottom: 0.25rem;">Scorecard Móvil</span>
-          <h3>Registro de Ronda en Campo</h3>
+          <span class="badge badge-gold" style="margin-bottom: 0.25rem;">Golfista seleccionado</span>
+          <h3>Registrar ronda de ${playerName}</h3>
         </div>
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
+      </div>
+
+      <div class="offline-info-card" role="status" style="margin-bottom: 1rem;">
+        <span aria-hidden="true">🏌️</span>
+        <span>Esta ronda se guardará en la ficha de <strong>${playerName}</strong>.</span>
       </div>
 
       <div class="grid-3" style="margin-bottom: 1rem;">
@@ -589,6 +626,23 @@ class RoundsEngine {
   }
 
   static async saveNewRound() {
+    const roundContext = RoundsEngine.roundPlayerContext;
+    const authenticatedWithoutCoachRole = Boolean(
+      window.AuthEngine?.user && !window.AuthEngine?.isCoach?.()
+    );
+    const currentAccountUserId = window.AuthEngine?.user?.id || null;
+    const changedContext = Boolean(
+      !roundContext?.playerId
+      || StorageManager.getActivePlayerId() !== roundContext.playerId
+      || currentAccountUserId !== roundContext.accountUserId
+    );
+    if (window.PlayerPortal?.active || authenticatedWithoutCoachRole || changedContext) {
+      RoundsEngine.roundPlayerContext = null;
+      App.closeModal();
+      App.showToast('No se guardó la ronda porque cambió la cuenta o el golfista seleccionado.');
+      return;
+    }
+
     const course = document.getElementById('round-course-input')?.value || 'Club de Golf';
     const date = document.getElementById('round-date-input')?.value || new Date().toISOString().split('T')[0];
     const notes = document.getElementById('round-notes-input')?.value || '';
@@ -654,8 +708,10 @@ class RoundsEngine {
 
     try {
       await StorageManager.addRound(newRound);
+      const playerName = roundContext.playerName;
+      RoundsEngine.roundPlayerContext = null;
       App.closeModal();
-      App.showToast('🏆 ¡Ronda guardada con éxito!');
+      App.showToast(`Ronda guardada en la ficha de ${playerName}.`);
       RoundsEngine.renderRoundsView();
       if (window.App && App.renderDashboard) App.renderDashboard();
       if (window.PlayerEngine && App.currentView === 'players') PlayerEngine.renderPlayersView();
