@@ -63,6 +63,10 @@ coach-de-golf/
 7. **Consultar al Mentor**: En **Mentoría & Metas**, haz preguntas al Coach Virtual para resolver dudas sobre tu swing y fijar tus metas de temporada.
 8. **Gestionar golfistas**: En **Golfistas & Datos**, crea una ficha por jugador, registra la evolución del hándicap y carga sus torneos. Cada ronda queda vinculada al golfista activo.
 
+En el panel del entrenador, la barra de contexto diferencia siempre la **cuenta conectada** del **golfista seleccionado**. Antes de registrar una ronda, la app también indica de forma explícita en qué ficha se guardará.
+
+Si hay una sesión por correo pero Supabase todavía no puede confirmar su rol, GolfCoach mantiene ocultas las fichas locales y ofrece reintentar la verificación. La aplicación nunca interpreta una cuenta pendiente como entrenador por descarte.
+
 ## 📲 Instalarla en el celular
 
 La versión publicada en GitHub Pages es una aplicación web instalable. Abrila desde:

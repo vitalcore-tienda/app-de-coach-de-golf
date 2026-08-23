@@ -131,6 +131,43 @@ body {
   touch-action: manipulation;
 }
 
+.auth-resolving-screen {
+  display: none;
+  min-height: 100vh;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 0.9rem;
+  padding: 1.5rem;
+  text-align: left;
+}
+
+.auth-resolving-screen > div:last-child {
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-resolving-screen strong {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+}
+
+.auth-resolving-screen span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+body.auth-resolving .auth-resolving-screen {
+  display: flex;
+}
+
+body.auth-resolving .app-container,
+body.auth-resolving .mobile-drawer-overlay,
+body.auth-resolving .modal-overlay,
+body.auth-resolving .toast-container {
+  display: none !important;
+}
+
 /* Typography elements */
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
@@ -291,6 +328,16 @@ a:hover {
   background: rgba(0, 0, 0, 0.15);
 }
 
+.player-context-label {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: var(--text-subtle);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
 .player-mini-card {
   display: flex;
   align-items: center;
@@ -398,6 +445,115 @@ a:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: var(--gold-400);
   color: var(--gold-400);
+}
+
+/* Keeps the signed-in account separate from the golfer whose data is open. */
+.workspace-context-bar {
+  min-height: 52px;
+  padding: 0.45rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: sticky;
+  top: 64px;
+  z-index: 80;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-surface-glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.workspace-context-control {
+  min-width: 0;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.35rem 0.55rem;
+  color: var(--text-main);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.workspace-context-control:hover,
+.workspace-context-control:focus-visible {
+  background: var(--bg-surface-elevated);
+  border-color: var(--border-strong);
+  outline: none;
+}
+
+.workspace-account-context {
+  flex: 0 1 280px;
+}
+
+.workspace-player-context {
+  flex: 1;
+}
+
+.workspace-context-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-full);
+  background: var(--bg-surface-elevated);
+  font-size: 0.9rem;
+}
+
+.workspace-context-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.12;
+}
+
+.workspace-context-copy strong {
+  overflow: hidden;
+  color: var(--text-main);
+  font-size: 0.84rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-context-label {
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.workspace-context-divider {
+  width: 1px;
+  height: 26px;
+  flex: 0 0 1px;
+  background: var(--border-subtle);
+}
+
+.workspace-player-handicap {
+  margin-left: auto;
+  padding: 0.2rem 0.5rem;
+  color: var(--gold-400);
+  background: rgba(212, 175, 55, 0.1);
+  border: 1px solid rgba(212, 175, 55, 0.2);
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workspace-context-change {
+  color: var(--primary-300);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 /* Viewport Panels */
@@ -551,6 +707,33 @@ a:hover {
     padding: 0 1rem;
   }
 
+  .workspace-context-bar {
+    top: 64px;
+    gap: 0.35rem;
+    padding: 0.35rem 0.65rem;
+  }
+
+  .workspace-context-control {
+    gap: 0.4rem;
+    padding: 0.3rem;
+  }
+
+  .workspace-account-context {
+    flex: 0 1 42%;
+  }
+
+  .workspace-context-change,
+  .workspace-player-handicap {
+    display: none;
+  }
+
+  .workspace-context-icon {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+    font-size: 0.86rem;
+  }
+
   .view-panel {
     padding: 1rem 0.85rem;
   }
@@ -563,6 +746,14 @@ a:hover {
 
   .topbar {
     height: 58px;
+  }
+
+  .workspace-context-bar {
+    top: 58px;
+  }
+
+  #topbar-new-round-btn {
+    display: none;
   }
 
   .page-title {
@@ -581,7 +772,8 @@ body.player-portal-active .mobile-drawer-overlay,
 body.player-portal-active #mobile-drawer-toggle-btn,
 body.player-portal-active #profile-settings-btn,
 body.player-portal-active #topbar-new-round-btn,
-body.player-portal-active #cloud-sync-btn {
+body.player-portal-active #cloud-sync-btn,
+body.player-portal-active #workspace-context-bar {
   display: none !important;
 }
 

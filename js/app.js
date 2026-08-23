@@ -11,10 +11,15 @@ class App {
     // 1. Cargar la base local y migrar los datos que ya existían.
     await StorageManager.initialize();
 
-    // 1.1 Restaurar la sesión cloud sin bloquear el modo local/offline.
-    // El respaldo se activa explícitamente desde CloudSync y nunca impide usar la app.
+    // 1.1 Resolver la sesión antes de exponer una experiencia por rol. Sin
+    // sesión, el modo local sigue disponible; con sesión, nunca se muestra el
+    // workspace del entrenador hasta confirmar el tipo de cuenta.
     if (window.AuthEngine) {
-      AuthEngine.init().catch(error => console.warn('No se pudo iniciar el acceso cloud:', error));
+      try {
+        await AuthEngine.init();
+      } catch (error) {
+        console.warn('No se pudo iniciar el acceso cloud:', error);
+      }
     }
 
     // 2. Setup Theme
@@ -42,6 +47,8 @@ class App {
       PWAEngine.init();
       PWAEngine.handleLaunchShortcut();
     }
+
+    document.body.classList.remove('auth-resolving');
   }
 
   static navigateTo(viewId) {
@@ -49,7 +56,11 @@ class App {
     // algún atajo antiguo intente abrir una vista del entrenador, se mantiene
     // el portal activo (la seguridad de los datos también se aplica con RLS).
     if (window.PlayerPortal?.active && viewId !== 'player-portal') {
-      PlayerPortal.activate();
+      if (PlayerPortal.isPlayerAccount?.()) {
+        PlayerPortal.activate();
+      } else {
+        PlayerPortal.activateIdentityPending?.();
+      }
       return;
     }
 
@@ -157,17 +168,17 @@ class App {
     const lastRoundCourse = lastRound ? App.escapeHTML(lastRound.course || '—') : 'Sin rondas';
 
     container.innerHTML = `
-      <!-- Welcome Hero Banner -->
+      <!-- Coach workspace hero -->
       <div class="card card-gold-glow" style="margin-bottom: 1.5rem; background: radial-gradient(circle at 10% 20%, rgba(24, 92, 59, 0.4) 0%, rgba(18, 25, 21, 0.95) 80%);">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
           <div>
             <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
-              <span class="badge badge-gold">Metodología 360° SotaPar</span>
-              <span class="badge badge-green">En Entrenamiento</span>
+              <span class="badge badge-gold">Panel del entrenador</span>
+              <span class="badge badge-green">Ficha seleccionada</span>
             </div>
-            <h2>Bienvenido, ${profileName}</h2>
+            <h2>Resumen de ${profileName}</h2>
             <p style="font-size: 0.88rem; max-width: 600px;">
-              Tu camino para bajar de hándicap dominando técnica, juego corto, estrategia de torneo y fortaleza mental.
+              Estás trabajando sobre la ficha deportiva de <strong style="color: var(--text-main);">${profileName}</strong>. Todo lo que cargues quedará asociado a este golfista.
             </p>
           </div>
           <div style="display: flex; gap: 0.5rem; width: 100%; flex-wrap: wrap;">
@@ -316,6 +327,62 @@ class App {
     }
   }
 
+  static getAccountIdentity() {
+    const auth = window.AuthEngine;
+
+    if (auth?.isCoach?.()) {
+      const emailName = String(auth.user?.email || '').split('@')[0];
+      return {
+        label: 'Entrenador',
+        name: String(auth.profile?.display_name || emailName || 'Cuenta conectada')
+      };
+    }
+
+    if (auth?.user) {
+      const emailName = String(auth.user.email || '').split('@')[0];
+      const isPlayer = auth.profile?.account_role === 'player';
+      return {
+        label: isPlayer ? 'Cuenta de golfista' : 'Cuenta en preparación',
+        name: String(auth.profile?.display_name || emailName || 'Cuenta conectada')
+      };
+    }
+
+    return {
+      label: 'Entrenador',
+      name: 'Modo local'
+    };
+  }
+
+  static updateWorkspaceContext() {
+    const profile = StorageManager.getProfile();
+    const playerName = String(profile?.name || 'Golfista');
+    const handicap = App.safeNumber(profile?.handicap, 0);
+    const account = App.getAccountIdentity();
+    const accountLabel = document.getElementById('workspace-account-label');
+    const coachName = document.getElementById('workspace-coach-name');
+    const playerNameEl = document.getElementById('workspace-player-name');
+    const playerHcp = document.getElementById('workspace-player-hcp');
+    const accountButton = document.getElementById('workspace-account-context');
+    const playerButton = document.getElementById('workspace-player-context');
+
+    if (accountLabel) accountLabel.textContent = account.label;
+    if (coachName) coachName.textContent = account.name;
+    if (playerNameEl) playerNameEl.textContent = playerName;
+    if (playerHcp) playerHcp.textContent = `HCP ${handicap}`;
+
+    if (accountButton) {
+      const accountAction = `${account.label}: ${account.name}. Abrir cuenta.`;
+      accountButton.title = accountAction;
+      accountButton.setAttribute('aria-label', accountAction);
+    }
+
+    if (playerButton) {
+      const playerAction = `Viendo a ${playerName}, hándicap ${handicap}. Cambiar golfista seleccionado.`;
+      playerButton.title = playerAction;
+      playerButton.setAttribute('aria-label', playerAction);
+    }
+  }
+
   static updateProfileDisplay() {
     const profile = StorageManager.getProfile();
     const name = String(profile?.name || 'Golfista');
@@ -328,7 +395,7 @@ class App {
     const avatarEl = document.getElementById('sidebar-player-avatar');
 
     if (nameEl) nameEl.innerText = name;
-    if (hcpEl) hcpEl.innerText = `HCP: ${handicap} (Meta: ${targetHandicap})`;
+    if (hcpEl) hcpEl.innerText = `HCP ${handicap} · Meta ${targetHandicap}`;
     if (avatarEl) avatarEl.innerText = name.charAt(0).toUpperCase();
 
     // Drawer elements
@@ -337,12 +404,15 @@ class App {
     const dAvatarEl = document.getElementById('drawer-player-avatar');
 
     if (dNameEl) dNameEl.innerText = name;
-    if (dHcpEl) dHcpEl.innerText = `HCP: ${handicap} • Editar ⚙️`;
+    if (dHcpEl) dHcpEl.innerText = `HCP ${handicap} · Cambiar`;
     if (dAvatarEl) dAvatarEl.innerText = name.charAt(0).toUpperCase();
+
+    App.updateWorkspaceContext();
   }
 
   static openProfileModal() {
     const profile = StorageManager.getProfile();
+    const profileName = App.escapeHTML(profile?.name || 'Golfista');
     const modal = document.getElementById('global-modal');
     const modalContent = document.getElementById('global-modal-content');
     if (!modal || !modalContent) return;
@@ -351,8 +421,8 @@ class App {
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
         <div>
-          <span class="badge badge-gold" style="margin-bottom: 0.25rem;">Configuración de Jugador</span>
-          <h3>Perfil del Golfista</h3>
+          <span class="badge badge-gold" style="margin-bottom: 0.25rem;">Golfista seleccionado</span>
+          <h3>Ficha de ${profileName}</h3>
         </div>
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
@@ -516,5 +586,8 @@ class App {
 window.App = App;
 
 document.addEventListener('DOMContentLoaded', () => {
-  App.init();
+  App.init().catch((error) => {
+    console.error('No se pudo iniciar GolfCoach:', error);
+    document.body.classList.remove('auth-resolving');
+  });
 });
