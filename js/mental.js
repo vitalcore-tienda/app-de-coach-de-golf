@@ -124,21 +124,21 @@ class MentalEngine {
 
         <div class="grid-3" style="margin-top: 1rem;">
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">1️⃣ Regla de los 10 Pasos</div>
+            <div class="reset-step-title"><span class="reset-step-number">1</span><span>Regla de los 10 Pasos</span></div>
             <p style="font-size: 0.85rem; color: var(--text-muted);">
               Tienes permitido lamentarte únicamente durante 10 pasos tras el golpe. Al llegar al paso 11, el tiro ya es pasado inalterable.
             </p>
           </div>
 
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">2️⃣ Guardar el Palo con Intención</div>
+            <div class="reset-step-title"><span class="reset-step-number">2</span><span>Guardar el Palo con Intención</span></div>
             <p style="font-size: 0.85rem; color: var(--text-muted);">
               Al introducir el palo en la bolsa, imagina que guardas allí cualquier pensamiento negativo o frustración.
             </p>
           </div>
 
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">3️⃣ Re-Enfocar en la Oportunidad</div>
+            <div class="reset-step-title"><span class="reset-step-number">3</span><span>Re-Enfocar en la Oportunidad</span></div>
             <p style="font-size: 0.85rem; color: var(--text-muted);">
               En lugar de pensar en el hoyo arruinado, míralo como un desafío emocionante para entrenar tu capacidad de recuperación (Scrambling).
             </p>

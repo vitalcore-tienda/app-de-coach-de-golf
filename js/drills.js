@@ -154,6 +154,7 @@ class DrillsEngine {
   static timerInitial = 1200;
   static isTimerRunning = false;
   static isBreakPhase = false;
+  static pendingProgress = new Set();
 
   static renderDrillsView() {
     const container = document.getElementById('drills-container');
@@ -247,21 +248,30 @@ class DrillsEngine {
     }).join('');
   }
 
-  static toggleDrillComplete(drillId) {
+  static async toggleDrillComplete(drillId) {
+    if (DrillsEngine.pendingProgress.has(drillId)) return;
+    DrillsEngine.pendingProgress.add(drillId);
     const progress = StorageManager.getDrillsProgress();
     if (!progress[drillId]) {
       progress[drillId] = { completed: false, reps: 0, lastDate: new Date().toISOString() };
     }
     progress[drillId].completed = !progress[drillId].completed;
     progress[drillId].lastDate = new Date().toISOString();
-    StorageManager.saveDrillsProgress(progress);
-
-    App.showToast(progress[drillId].completed ? '🎉 ¡Drill completado y registrado!' : 'Drill marcado como pendiente.');
-    DrillsEngine.renderDrillsView();
-    if (window.App && App.renderDashboard) App.renderDashboard();
+    try {
+      await StorageManager.saveDrillsProgress(progress);
+      App.showToast(progress[drillId].completed ? '🎉 ¡Drill completado y registrado!' : 'Drill marcado como pendiente.');
+      DrillsEngine.renderDrillsView();
+      if (window.App && App.renderDashboard) App.renderDashboard();
+    } catch (error) {
+      console.error('No se pudo guardar el progreso:', error);
+      App.showToast('No se pudo guardar el progreso. Intentá nuevamente.');
+    } finally {
+      DrillsEngine.pendingProgress.delete(drillId);
+    }
   }
 
   static startDrillWithTimer(drillId, minutes) {
+    DrillsEngine.stopTimer();
     DrillsEngine.timerSeconds = minutes * 60;
     DrillsEngine.timerInitial = minutes * 60;
     DrillsEngine.openTimerModal();
@@ -304,11 +314,12 @@ class DrillsEngine {
         </div>
       </div>
 
-      <div style="margin-top: 1.5rem; text-align: center; font-size: 0.85rem; color: var(--text-muted);">
+      <div class="ui-icon-copy" style="margin-top: 1.5rem; text-align: center; font-size: 0.85rem; color: var(--text-muted);">
         💡 <em>"20 minutos de práctica con intención y rutina valen más que 2 horas pegando 100 bolas en automático sin pensar." — SotaPar</em>
       </div>
     `;
 
+    App.setModalCleanup(() => DrillsEngine.stopTimer());
     App.openModal();
   }
 

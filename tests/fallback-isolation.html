@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>GolfCoach · prueba sin IndexedDB</title>
+</head>
+<body>
+  <h1>Prueba del almacenamiento alternativo</h1>
+  <pre id="result">Ejecutando…</pre>
+
+  <script>Object.defineProperty(window, 'indexedDB', { value: undefined, configurable: true });</script>
+  <script src="../js/utils.js?test=v18"></script>
+  <script src="../js/database.js?test=v18"></script>
+  <script src="../js/storage.js?test=v18"></script>
+  <script>
+    (async () => {
+      const result = document.getElementById('result');
+      const token = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const ownerA = `fallback-owner-a-${token}`;
+      const ownerB = `fallback-owner-b-${token}`;
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+
+      try {
+        Object.keys(STORAGE_KEYS).forEach((key) => {
+          STORAGE_KEYS[key] = `${STORAGE_KEYS[key]}:test:${token}`;
+        });
+        PLAYER_DATA_KEYS.splice(0, PLAYER_DATA_KEYS.length, ...PLAYER_DATA_KEYS.map((key) => `${key}:test:${token}`));
+        await StorageManager.initialize();
+        assert(!StorageManager.persistenceAvailable, 'La prueba usa el almacenamiento alternativo');
+        await StorageManager.unlockWorkspace(ownerA);
+        const playerA1 = await StorageManager.createPlayer({ name: `Jugador A1 ${token}`, handicap: 18 });
+        await StorageManager.saveGoals([{ id: `goal-a1-${token}`, title: 'Meta A1' }]);
+        const playerA2 = await StorageManager.createPlayer({ name: `Jugador A2 ${token}`, handicap: 22 });
+        await StorageManager.saveGoals([{ id: `goal-a2-${token}`, title: 'Meta A2' }]);
+
+        await StorageManager.setActivePlayer(playerA1.id);
+        assert(StorageManager.getGoals()[0]?.title === 'Meta A1', 'Cambiar de golfista recupera los datos del primero');
+        await StorageManager.setActivePlayer(playerA2.id);
+        assert(StorageManager.getGoals()[0]?.title === 'Meta A2', 'La caché no mezcla metas entre golfistas');
+
+        StorageManager.lockWorkspace();
+        await StorageManager.unlockWorkspace(ownerB);
+        assert((await StorageManager.getPlayers()).length === 0, 'El fallback también aísla entrenadores');
+        const fallbackDemo = await StorageManager.createDemoWorkspace();
+        assert(StorageManager.isDemoPlayer(fallbackDemo), 'El fallback crea la demostración como ficha diferenciada');
+        assert(StorageManager.getRounds().length === 3 && StorageManager.getAssessment().completed, 'El fallback guarda completo el paquete de demostración');
+        StorageManager.lockWorkspace();
+        await StorageManager.unlockWorkspace(ownerA);
+        assert((await StorageManager.getPlayers()).length === 2, 'El dueño recupera sus golfistas en fallback');
+
+        const legacyPlayer = { id: `legacy-${token}`, name: `Ficha anterior ${token}`, handicap: 25 };
+        StorageManager.set(STORAGE_KEYS.PLAYERS, [legacyPlayer]);
+        StorageManager.unclaimedLegacyCount = 1;
+        const firstClaim = await StorageManager.claimLegacyWorkspace();
+        assert(firstClaim >= 1, 'El primer dueño puede reclamar la ficha antigua en fallback');
+        const ownerAPlayersAfterClaim = await StorageManager.getPlayers();
+        assert(ownerAPlayersAfterClaim.some((player) => player.id === legacyPlayer.id), 'La ficha anterior queda vinculada al primer dueño');
+        assert(ownerAPlayersAfterClaim.some((player) => player.id === playerA1.id) && ownerAPlayersAfterClaim.some((player) => player.id === playerA2.id), 'El reclamo conserva las fichas ya creadas por el dueño');
+        await StorageManager.unlockWorkspace(ownerB);
+        const secondClaim = await StorageManager.claimLegacyWorkspace();
+        assert(secondClaim === 0, 'La ficha antigua no puede volver a reclamarse desde otra cuenta');
+        assert(!(await StorageManager.getPlayers()).some((player) => player.id === legacyPlayer.id), 'El segundo dueño no recibe la ficha antigua');
+
+        const rollbackKeyA = `rollback-a-${token}`;
+        const rollbackKeyB = `rollback-b-${token}`;
+        localStorage.setItem(rollbackKeyA, JSON.stringify('anterior-a'));
+        localStorage.setItem(rollbackKeyB, JSON.stringify('anterior-b'));
+        const originalSetItem = Storage.prototype.setItem;
+        let writeCount = 0;
+        let rollbackRejected = false;
+        Storage.prototype.setItem = function (key, value) {
+          writeCount += 1;
+          if (writeCount === 2) throw new Error('Fallo de almacenamiento simulado');
+          return originalSetItem.call(this, key, value);
+        };
+        try {
+          StorageManager.commitFallbackWrites([
+            { key: rollbackKeyA, value: 'nuevo-a' },
+            { key: rollbackKeyB, value: 'nuevo-b' }
+          ]);
+        } catch (error) {
+          rollbackRejected = true;
+        } finally {
+          Storage.prototype.setItem = originalSetItem;
+        }
+        assert(rollbackRejected, 'Un fallo intermedio cancela el guardado alternativo');
+        assert(StorageManager.get(rollbackKeyA) === 'anterior-a' && StorageManager.get(rollbackKeyB) === 'anterior-b', 'El rollback restaura todos los valores anteriores');
+
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'passed';
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+      } catch (error) {
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'failed';
+        result.textContent = JSON.stringify({ passed: false, checks, error: error.message }, null, 2);
+      }
+    })();
+  </script>
+</body>
+</html>

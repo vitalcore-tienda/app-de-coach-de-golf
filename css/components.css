@@ -4,6 +4,90 @@
    ========================================================================== */
 
 /* 1. Buttons & Controls */
+.ui-icon {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  flex: 0 0 auto;
+  vertical-align: -0.14em;
+  color: currentColor;
+  overflow: visible;
+}
+
+.btn .ui-icon,
+.filter-pill .ui-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.brand-badge .ui-icon {
+  width: 1.45rem;
+  height: 1.45rem;
+}
+
+.nav-icon .ui-icon,
+.bottom-nav-icon .ui-icon {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.card-icon .ui-icon,
+.workspace-context-icon .ui-icon,
+.player-avatar .ui-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.topbar-action-icon .ui-icon,
+.demo-mode-notice-icon .ui-icon,
+.demo-mode-indicator .ui-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.badge .ui-icon,
+.stat-sub .ui-icon,
+.portal-item-meta .ui-icon,
+.toast .ui-icon {
+  width: 0.9rem;
+  height: 0.9rem;
+}
+
+.icon-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.reset-step-title {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 0.55rem;
+  color: var(--text-main);
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.reset-step-number {
+  width: 1.75rem;
+  height: 1.75rem;
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 1.75rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  color: var(--gold-400);
+  background: rgba(212, 175, 55, 0.08);
+  font-size: 0.78rem;
+}
+
+.ui-icon-copy .ui-icon,
+#breathing-instruction-text .ui-icon,
+#network-status .ui-icon {
+  margin-right: 0.35rem;
+}
+
 .btn {
   display: inline-flex;
   align-items: center;
@@ -613,6 +697,11 @@
   box-shadow: var(--shadow-gold);
 }
 
+.hole-chip-btn.completed:not(.active) {
+  border-color: rgba(52, 168, 111, 0.55);
+  color: var(--primary-300);
+}
+
 .stepper-control {
   display: flex;
   align-items: center;
@@ -897,6 +986,55 @@
   min-width: 132px;
 }
 
+.player-portal-section {
+  scroll-margin-top: 84px;
+}
+
+.coach-messages-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.coach-messages-hero > div {
+  max-width: 720px;
+}
+
+.coach-messages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.coach-message-player-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.coach-message-player-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  min-width: 0;
+}
+
+.coach-message-player-main h3 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coach-message-player-main p {
+  margin-top: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .player-portal-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
@@ -1070,15 +1208,21 @@
     font-size: 0;
   }
 
-  .pwa-install-button::before {
-    content: '📲';
-    font-size: 1rem;
-  }
-
   .player-portal-hero,
   .player-portal-grid,
   .portal-message-composer {
     grid-template-columns: 1fr;
+  }
+
+  .coach-messages-hero,
+  .coach-message-player-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .coach-message-player-card .btn,
+  .coach-messages-hero .btn {
+    width: 100%;
   }
 
   .player-portal-refresh,

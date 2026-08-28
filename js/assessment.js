@@ -199,6 +199,7 @@ class AssessmentEngine {
   constructor() {
     this.currentStep = 0;
     this.userAnswers = {};
+    this.finishing = false;
   }
 
   // Assessments can be restored from older local records or imported data.
@@ -467,6 +468,7 @@ class AssessmentEngine {
   }
 
   selectAnswer(score) {
+    if (this.finishing || this.currentStep >= ASSESSMENT_QUESTIONS.length) return;
     const q = ASSESSMENT_QUESTIONS[this.currentStep];
     if (!this.userAnswers[q.category]) {
       this.userAnswers[q.category] = [];
@@ -492,7 +494,9 @@ class AssessmentEngine {
     }
   }
 
-  finishQuiz() {
+  async finishQuiz() {
+    if (this.finishing) return;
+    this.finishing = true;
     // Calculate category averages
     const calcCat = (cat) => {
       const arr = this.userAnswers[cat] || [50];
@@ -514,14 +518,35 @@ class AssessmentEngine {
       lastDate: new Date().toISOString()
     };
 
-    StorageManager.saveAssessment(assessmentData);
-    App.closeModal();
-    App.showToast('✅ ¡Diagnóstico 360° completado con éxito!');
+    try {
+      const modalContent = document.getElementById('global-modal-content');
+      if (modalContent) {
+        modalContent.innerHTML = `
+          <div class="modal-header"><div><span class="badge badge-gold">Guardando</span><h3 style="margin-top:0.35rem;">Finalizando diagnóstico</h3></div></div>
+          <p style="color:var(--text-muted);">Estamos guardando las respuestas completas antes de actualizar el panel.</p>
+        `;
+      }
+      await StorageManager.saveAssessment(assessmentData);
+      App.closeModal();
+      App.showToast('✅ ¡Diagnóstico 360° completado con éxito!');
 
-    // Re-render views
-    AssessmentEngine.renderDiagnosticView();
-    if (window.App && App.renderDashboard) {
-      App.renderDashboard();
+      // Re-render views
+      AssessmentEngine.renderDiagnosticView();
+      if (window.App && App.renderDashboard) {
+        App.renderDashboard();
+      }
+    } catch (error) {
+      console.error('No se pudo guardar el diagnóstico:', error);
+      this.finishing = false;
+      const modalContent = document.getElementById('global-modal-content');
+      if (modalContent) {
+        modalContent.innerHTML = `
+          <div class="modal-header"><div><span class="badge badge-gold">Respuestas conservadas</span><h3 style="margin-top:0.35rem;">No se pudo guardar</h3></div><button class="modal-close" onclick="App.closeModal()">&times;</button></div>
+          <p style="color:var(--text-muted); line-height:1.5;">Tus respuestas siguen en esta ventana. Reintentá el guardado sin completar nuevamente el diagnóstico.</p>
+          <button class="btn btn-primary" style="width:100%; margin-top:1rem;" onclick="window.currentQuizInstance.finishQuiz()">Reintentar guardado</button>
+        `;
+      }
+      App.showToast('No se pudo guardar el diagnóstico. Intentá nuevamente.');
     }
   }
 }

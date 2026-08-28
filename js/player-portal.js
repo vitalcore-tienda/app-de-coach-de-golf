@@ -14,6 +14,13 @@ class PlayerPortal {
   static coachContext = null;
   static identityKey = null;
   static loadGeneration = 0;
+  static currentSection = 'today';
+  static sectionTargets = Object.freeze({
+    today: 'player-portal-today',
+    plan: 'player-portal-plan',
+    progress: 'player-portal-progress',
+    messages: 'player-portal-messages-card'
+  });
 
   static isPlayerAccount() {
     return Boolean(AuthEngine.user?.id && AuthEngine.profile?.account_role === 'player');
@@ -21,6 +28,37 @@ class PlayerPortal {
 
   static isIdentityPending() {
     return Boolean(AuthEngine.user?.id && !AuthEngine.profile);
+  }
+
+  static setPlayerNavigationVisible(visible) {
+    const navigation = document.getElementById('player-bottom-nav');
+    if (navigation) navigation.hidden = !visible;
+  }
+
+  static updatePlayerNavigation(sectionId = PlayerPortal.currentSection) {
+    if (!PlayerPortal.sectionTargets[sectionId]) sectionId = 'today';
+    PlayerPortal.currentSection = sectionId;
+    document.querySelectorAll('#player-bottom-nav [data-player-section]').forEach((item) => {
+      const active = item.dataset.playerSection === sectionId;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
+    const titles = { today: 'Hoy', plan: 'Mi plan', progress: 'Progreso', messages: 'Mensajes' };
+    const title = document.getElementById('current-page-title');
+    if (title && PlayerPortal.active) title.textContent = titles[sectionId];
+  }
+
+  static navigateToSection(sectionId) {
+    if (!PlayerPortal.active || !PlayerPortal.sectionTargets[sectionId]) return false;
+    const target = document.getElementById(PlayerPortal.sectionTargets[sectionId]);
+    if (!target) return false;
+    PlayerPortal.updatePlayerNavigation(sectionId);
+    target.scrollIntoView({
+      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 'auto' : 'smooth',
+      block: 'start'
+    });
+    return true;
   }
 
   static cacheId(userId = AuthEngine.user?.id) {
@@ -36,6 +74,8 @@ class PlayerPortal {
       PlayerPortal.loadGeneration += 1;
       PlayerPortal.loadPromise = null;
       PlayerPortal.data = null;
+      PlayerPortal.coachContext = null;
+      PlayerPortal.currentSection = 'today';
     }
     return { userId, generation: PlayerPortal.loadGeneration };
   }
@@ -76,12 +116,14 @@ class PlayerPortal {
 
   static activate(identityContext = PlayerPortal.syncIdentityContext()) {
     PlayerPortal.active = true;
+    PlayerPortal.currentSection = 'today';
+    PlayerPortal.setPlayerNavigationVisible(false);
     PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
     document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
     document.getElementById('player-portal-panel')?.classList.add('active');
     const title = document.getElementById('current-page-title');
-    if (title) title.textContent = 'Mi golf';
+    if (title) title.textContent = 'Hoy';
     PlayerPortal.renderLoading();
     PlayerPortal.load({ identityContext }).catch((error) => {
       console.warn('No se pudo preparar el portal del golfista:', error);
@@ -92,6 +134,7 @@ class PlayerPortal {
     PlayerPortal.active = true;
     PlayerPortal.data = null;
     PlayerPortal.loadPromise = null;
+    PlayerPortal.setPlayerNavigationVisible(false);
     PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
     document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
@@ -123,6 +166,9 @@ class PlayerPortal {
     PlayerPortal.active = false;
     PlayerPortal.data = null;
     PlayerPortal.loadPromise = null;
+    PlayerPortal.coachContext = null;
+    PlayerPortal.currentSection = 'today';
+    PlayerPortal.setPlayerNavigationVisible(false);
     document.body.classList.remove('player-portal-active');
 
     if (!wasActive || !window.App) return;
@@ -133,6 +179,7 @@ class PlayerPortal {
   static renderLoading() {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
+    PlayerPortal.setPlayerNavigationVisible(false);
     container.innerHTML = `
       <div class="card portal-account-pending">
         <div class="card-icon">⛳</div>
@@ -324,7 +371,7 @@ class PlayerPortal {
       : '<span class="badge badge-green">Datos protegidos y actualizados</span>';
 
     container.innerHTML = `
-      <div class="card card-gold-glow player-portal-hero">
+      <div class="card card-gold-glow player-portal-hero player-portal-section" id="player-portal-today">
         <div class="player-portal-hero-copy">
           <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">${fromCacheBadge}<span class="badge badge-gold">Mi golf</span></div>
           <h2>Hola, ${PlayerPortal.escapeHTML(player.full_name)}</h2>
@@ -357,7 +404,7 @@ class PlayerPortal {
       </div>
 
       <div class="player-portal-grid">
-        <div class="card">
+        <div class="card player-portal-section" id="player-portal-plan">
           <div class="card-header">
             <div class="card-title-group"><div class="card-icon">🎯</div><h3 class="card-title">Mis entrenamientos</h3></div>
             <span class="badge badge-gold">${activeAssignments.length} activos</span>
@@ -365,7 +412,7 @@ class PlayerPortal {
           <div class="portal-stack">${PlayerPortal.renderTrainingAssignments(data)}</div>
         </div>
 
-        <div class="card">
+        <div class="card player-portal-section" id="player-portal-progress">
           <div class="card-header">
             <div class="card-title-group"><div class="card-icon">📈</div><h3 class="card-title">Evolución de handicap</h3></div>
           </div>
@@ -398,7 +445,7 @@ class PlayerPortal {
         <div class="portal-stack">${PlayerPortal.renderRounds(data.rounds)}</div>
       </div>
 
-      <div class="card" id="player-portal-messages-card">
+      <div class="card player-portal-section" id="player-portal-messages-card">
         <div class="card-header">
           <div class="card-title-group"><div class="card-icon">💬</div><h3 class="card-title">Mensajes con mi entrenador</h3></div>
           <span class="badge badge-green">Privado</span>
@@ -412,11 +459,14 @@ class PlayerPortal {
     `;
 
     PlayerPortal.bindPortalActions(container);
+    PlayerPortal.setPlayerNavigationVisible(true);
+    PlayerPortal.updatePlayerNavigation();
   }
 
   static renderUnlinkedAccount() {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
+    PlayerPortal.setPlayerNavigationVisible(false);
     const email = PlayerPortal.escapeHTML(AuthEngine.user?.email || 'tu correo');
     container.innerHTML = `
       <div class="card portal-account-pending">
@@ -433,6 +483,7 @@ class PlayerPortal {
   static renderError(error) {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
+    PlayerPortal.setPlayerNavigationVisible(false);
     const offline = navigator.onLine === false || String(error?.message || '').includes('offline');
     container.innerHTML = `
       <div class="card portal-account-pending">
@@ -494,7 +545,7 @@ class PlayerPortal {
   static renderHandicapTrend(history, currentHandicap) {
     const points = history.slice(0, 8).reverse();
     if (!points.length && currentHandicap !== null && currentHandicap !== undefined) {
-      points.push({ handicap_index: currentHandicap, effective_date: new Date().toISOString().slice(0, 10) });
+      points.push({ handicap_index: currentHandicap, effective_date: GolfUtils.localDateISO() });
     }
     if (!points.length) return '<div class="portal-empty-state">Todavía no hay registros de handicap.</div>';
 
@@ -515,7 +566,7 @@ class PlayerPortal {
   }
 
   static upcomingTournaments(tournaments) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = GolfUtils.localDateISO();
     return tournaments
       .filter((item) => ['scheduled', 'in_progress'].includes(item.status) && (item.end_date || item.start_date) >= today)
       .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
@@ -685,6 +736,79 @@ class PlayerPortal {
     `;
   }
 
+  static async renderCoachMessagesHub() {
+    const container = document.getElementById('messages-container');
+    if (!container) return;
+    if (!window.AuthEngine?.isCoach?.()) {
+      container.innerHTML = '<div class="card portal-account-pending"><div class="card-icon">🔐</div><h2>Acceso del entrenador requerido</h2><p>Ingresá con la cuenta del entrenador para abrir las conversaciones privadas.</p></div>';
+      return;
+    }
+
+    container.innerHTML = '<div class="card portal-account-pending"><div class="card-icon">💬</div><h2>Preparando conversaciones…</h2></div>';
+    try {
+      const players = await StorageManager.getPlayers();
+      if (!players.length) {
+        container.innerHTML = `
+          <div class="card card-gold-glow empty-state-panel">
+            <div class="card-icon">💬</div>
+            <h2>Todavía no hay golfistas</h2>
+            <p style="margin-top:0.45rem; color:var(--text-muted);">Agregá la primera ficha para poder asignar planes y abrir conversaciones privadas.</p>
+            <button class="btn btn-primary" style="margin-top:1rem;" onclick="App.navigateTo('players')">Agregar golfista</button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="card card-gold-glow coach-messages-hero">
+          <div>
+            <span class="badge badge-green">Comunicación privada</span>
+            <h2 style="margin-top:0.55rem;">Mensajes con tus golfistas</h2>
+            <p style="margin-top:0.35rem; color:var(--text-muted); line-height:1.55;">Elegí una ficha para abrir la conversación. Los mensajes se habilitan cuando el golfista está respaldado y vinculado por correo.</p>
+          </div>
+          <button class="btn btn-secondary" onclick="App.navigateTo('players')">Gestionar golfistas</button>
+        </div>
+        <div class="coach-messages-grid">
+          ${players.map((player) => PlayerPortal.renderCoachMessageHubCard(player)).join('')}
+        </div>
+      `;
+
+      container.querySelectorAll('[data-coach-hub-message-id]').forEach((button) => {
+        button.addEventListener('click', () => PlayerPortal.openCoachMessagesModal(button.dataset.coachHubMessageId));
+      });
+    } catch (error) {
+      console.error('No se pudo preparar el centro de mensajes:', error);
+      container.innerHTML = '<div class="card empty-state-panel"><div class="card-icon">⚠️</div><h2>No pudimos cargar las conversaciones</h2><p style="margin-top:0.45rem; color:var(--text-muted);">Tus fichas no se modificaron. Intentá nuevamente.</p></div>';
+    }
+  }
+
+  static renderCoachMessageHubCard(player) {
+    const playerId = PlayerPortal.escapeHTML(player?.id || '');
+    const playerName = PlayerPortal.escapeHTML(player?.name || 'Golfista');
+    const isDemo = StorageManager.isDemoPlayer(player);
+    const linked = PlayerPortal.validUuid(player?.remoteId);
+    const status = isDemo
+      ? { badge: 'badge-gold', label: 'Modo demo · sin nube', description: 'Las demostraciones no admiten mensajes.' }
+      : linked
+        ? { badge: 'badge-green', label: 'Cuenta vinculada', description: 'Conversación privada disponible.' }
+        : { badge: 'badge-blue', label: 'Falta respaldo', description: 'La app te guiará para habilitar los mensajes.' };
+    return `
+      <article class="card coach-message-player-card">
+        <div class="coach-message-player-main">
+          <div class="player-avatar">${PlayerPortal.escapeHTML(String(player?.name || 'G').charAt(0).toUpperCase())}</div>
+          <div style="min-width:0;">
+            <h3>${playerName}</h3>
+            <span class="badge ${status.badge}" style="margin-top:0.4rem;">${status.label}</span>
+            <p>${status.description}</p>
+          </div>
+        </div>
+        <button class="btn ${linked ? 'btn-primary' : 'btn-secondary'}" type="button" ${isDemo ? 'disabled' : `data-coach-hub-message-id="${playerId}"`}>
+          ${isDemo ? 'No disponible' : linked ? 'Abrir conversación' : 'Configurar mensajes'}
+        </button>
+      </article>
+    `;
+  }
+
   static async localPlayer(localPlayerId) {
     const players = await StorageManager.getPlayers();
     return players.find((player) => String(player.id) === String(localPlayerId)) || null;
@@ -716,7 +840,7 @@ class PlayerPortal {
       PlayerPortal.coachContext = { localPlayerId, remotePlayerId: player.remoteId, playerName: player.name };
       const drills = typeof DRILLS_CATALOG !== 'undefined' ? DRILLS_CATALOG : [];
       const options = drills.map((drill) => `<option value="${PlayerPortal.escapeHTML(drill.id)}">${PlayerPortal.escapeHTML(drill.categoryName)} · ${PlayerPortal.escapeHTML(drill.title)}</option>`).join('');
-      const tomorrow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const tomorrow = GolfUtils.localDateISO(new Date(Date.now() + 7 * 86400000));
 
       AuthEngine.renderModal(`
         <div class="modal-handle-bar"></div>

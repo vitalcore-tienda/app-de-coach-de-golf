@@ -22,12 +22,13 @@ class RoundsEngine {
       RoundsEngine.holeData.push({
         hole: i + 1,
         par: par,
-        strokes: par + 1,
-        putts: 2,
-        fir: par > 3 ? true : false,
-        gir: false,
+        strokes: null,
+        putts: null,
+        fir: null,
+        gir: null,
         bunker: false,
-        penalty: 0
+        penalty: 0,
+        completed: false
       });
     }
   }
@@ -43,6 +44,24 @@ class RoundsEngine {
     const rounds = StorageManager.getRounds();
     const profile = StorageManager.getProfile();
     const playerName = RoundsEngine.escapeHTML(profile?.name || 'Golfista');
+
+    if (!rounds.length) {
+      container.innerHTML = `
+        <div class="card card-gold-glow" style="margin-bottom:1.5rem;">
+          <span class="badge badge-gold">Golfista seleccionado</span>
+          <h2 style="margin-top:0.45rem;">Rondas de ${playerName}</h2>
+          <p>Las estadísticas aparecerán cuando registres una ronda real.</p>
+        </div>
+        <div class="card empty-state-panel">
+          <div class="card-icon">⛳</div>
+          <span class="badge badge-green">Sin rondas cargadas</span>
+          <h3 style="margin-top:0.7rem;">Registrá la primera vuelta</h3>
+          <p style="max-width:540px; margin:0.45rem auto 1rem; color:var(--text-muted); line-height:1.55;">Cargá 9 o 18 hoyos completos. Hasta entonces no mostramos promedios ni estadísticas estimadas.</p>
+          <button class="btn btn-primary" onclick="RoundsEngine.openNewRoundModal()">Registrar primera ronda</button>
+        </div>
+      `;
+      return;
+    }
 
     container.innerHTML = `
       <div class="card card-gold-glow" style="margin-bottom: 1.5rem;">
@@ -275,7 +294,8 @@ class RoundsEngine {
     RoundsEngine.roundPlayerContext = {
       playerId,
       playerName: String(profile?.name || 'Golfista'),
-      accountUserId: window.AuthEngine?.user?.id || null
+      accountUserId: window.AuthEngine?.user?.id || null,
+      workspaceOwnerId: StorageManager.workspaceOwnerId
     };
 
     modalContent.innerHTML = `
@@ -296,11 +316,11 @@ class RoundsEngine {
       <div class="grid-3" style="margin-bottom: 1rem;">
         <div class="form-group" style="margin-bottom: 0.5rem;">
           <label class="form-label">Campo de Golf</label>
-          <input type="text" class="form-control" id="round-course-input" value="Club de Golf">
+          <input type="text" class="form-control" id="round-course-input" placeholder="Nombre del campo">
         </div>
         <div class="form-group" style="margin-bottom: 0.5rem;">
           <label class="form-label">Fecha</label>
-          <input type="date" class="form-control" id="round-date-input" value="${new Date().toISOString().split('T')[0]}">
+          <input type="date" class="form-control" id="round-date-input" value="${GolfUtils.localDateISO()}">
         </div>
         <div class="form-group" style="margin-bottom: 0.5rem;">
           <label class="form-label">Modalidad</label>
@@ -351,22 +371,25 @@ class RoundsEngine {
       <!-- Live Total Bar -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
         <div id="live-round-total" style="font-weight: 700; color: var(--gold-400); font-size: 1.05rem;">
-          Total: 86 (+14) • 33 Putts
+          0 de 18 hoyos completos
         </div>
-        <button class="btn btn-primary" style="min-height: 48px; width: 100%;" onclick="RoundsEngine.saveNewRound()">
+        <button class="btn btn-primary" id="round-save-btn" style="min-height: 48px; width: 100%;" onclick="RoundsEngine.saveNewRound()">
           💾 Guardar Ronda
         </button>
       </div>
     `;
 
     RoundsEngine.updateLiveTotals();
+    App.setModalCleanup(() => {
+      RoundsEngine.roundPlayerContext = null;
+    });
     App.openModal();
   }
 
   static renderHolePaginationChips() {
     return RoundsEngine.holeData.map((h, idx) => `
-      <button class="hole-chip-btn ${idx === RoundsEngine.activeMobileHole ? 'active' : ''}" onclick="RoundsEngine.selectHole(${idx})">
-        ${h.hole}
+      <button class="hole-chip-btn ${idx === RoundsEngine.activeMobileHole ? 'active' : ''} ${h.completed ? 'completed' : ''}" onclick="RoundsEngine.selectHole(${idx})">
+        ${h.hole}${h.completed ? ' ✓' : ''}
       </button>
     `).join('');
   }
@@ -407,7 +430,7 @@ class RoundsEngine {
             <label class="form-label" style="text-align: center;">Golpes Totales</label>
             <div class="stepper-control">
               <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', -1)">−</button>
-              <span class="stepper-value" id="stepper-strokes-${idx}">${h.strokes}</span>
+              <span class="stepper-value" id="stepper-strokes-${idx}">${h.strokes ?? '—'}</span>
               <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', 1)">+</button>
             </div>
           </div>
@@ -417,7 +440,7 @@ class RoundsEngine {
             <label class="form-label" style="text-align: center;">Putts en Green</label>
             <div class="stepper-control">
               <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', -1)">−</button>
-              <span class="stepper-value" id="stepper-putts-${idx}">${h.putts}</span>
+              <span class="stepper-value" id="stepper-putts-${idx}">${h.putts ?? '—'}</span>
               <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', 1)">+</button>
             </div>
           </div>
@@ -469,18 +492,29 @@ class RoundsEngine {
     let minVal = field === 'strokes' ? 1 : 0;
     let maxVal = field === 'strokes' ? 15 : 6;
 
-    h[field] = Math.max(minVal, Math.min(maxVal, h[field] + delta));
+    let current = Number(h[field]);
+    if (h[field] === null || h[field] === undefined || !Number.isFinite(current)) {
+      current = field === 'strokes'
+        ? (delta > 0 ? h.par - 1 : 2)
+        : (field === 'putts' ? (delta > 0 ? 1 : 1) : 0);
+    }
+    h[field] = Math.max(minVal, Math.min(maxVal, current + delta));
+    h.completed = Number.isInteger(h.strokes) && h.strokes > 0 && Number.isInteger(h.putts) && h.putts >= 0;
 
     // Update specific stepper label in DOM
     const valEl = document.getElementById(`stepper-${field}-${holeIdx}`);
     if (valEl) valEl.innerText = h[field];
 
+    const chipsContainer = document.getElementById('hole-chips-container');
+    if (chipsContainer) chipsContainer.innerHTML = RoundsEngine.renderHolePaginationChips();
     RoundsEngine.updateLiveTotals();
   }
 
   static updateHole(index, field, value) {
     if (RoundsEngine.holeData[index]) {
       RoundsEngine.holeData[index][field] = value;
+      const h = RoundsEngine.holeData[index];
+      h.completed = Number.isInteger(h.strokes) && h.strokes > 0 && Number.isInteger(h.putts) && h.putts >= 0;
       RoundsEngine.updateLiveTotals();
     }
   }
@@ -497,18 +531,21 @@ class RoundsEngine {
     let totPar = 0;
     let totPutts = 0;
 
-    RoundsEngine.holeData.forEach(h => {
-      totScore += (h.strokes || 0);
+    const completedHoles = RoundsEngine.holeData.filter((hole) => hole.completed);
+    completedHoles.forEach(h => {
+      totScore += h.strokes;
       totPar += (h.par || 4);
       totPutts += (h.putts || 0);
     });
 
-    const diff = totScore - totPar;
+    const diff = completedHoles.length ? totScore - totPar : 0;
     const diffStr = diff > 0 ? `+${diff}` : (diff === 0 ? 'E' : `${diff}`);
 
     const label = document.getElementById('live-round-total');
     if (label) {
-      label.innerText = `Total: ${totScore} (${diffStr}) • ${totPutts} Putts`;
+      label.innerText = completedHoles.length
+        ? `${completedHoles.length}/${RoundsEngine.holeData.length} hoyos · ${totScore} golpes (${diffStr}) · ${totPutts} putts`
+        : `0 de ${RoundsEngine.holeData.length} hoyos completos`;
     }
   }
 
@@ -635,6 +672,7 @@ class RoundsEngine {
       !roundContext?.playerId
       || StorageManager.getActivePlayerId() !== roundContext.playerId
       || currentAccountUserId !== roundContext.accountUserId
+      || StorageManager.workspaceOwnerId !== roundContext.workspaceOwnerId
     );
     if (window.PlayerPortal?.active || authenticatedWithoutCoachRole || changedContext) {
       RoundsEngine.roundPlayerContext = null;
@@ -643,13 +681,42 @@ class RoundsEngine {
       return;
     }
 
-    const course = document.getElementById('round-course-input')?.value || 'Club de Golf';
-    const date = document.getElementById('round-date-input')?.value || new Date().toISOString().split('T')[0];
+    const course = document.getElementById('round-course-input')?.value?.trim() || '';
+    const date = document.getElementById('round-date-input')?.value || GolfUtils.localDateISO();
     const notes = document.getElementById('round-notes-input')?.value || '';
     const tournamentId = document.getElementById('round-tournament-select')?.value || null;
     const kind = tournamentId
       ? 'Torneo'
       : (document.getElementById('round-kind-select')?.value || 'Práctica');
+
+    if (!course) {
+      App.showToast('Ingresá el nombre del campo.');
+      document.getElementById('round-course-input')?.focus();
+      return;
+    }
+
+    const incompleteIndex = RoundsEngine.holeData.findIndex((hole) => !hole.completed);
+    if (incompleteIndex >= 0) {
+      RoundsEngine.selectHole(incompleteIndex);
+      App.showToast(`Completá golpes y putts del hoyo ${incompleteIndex + 1} antes de guardar.`);
+      return;
+    }
+
+    const inconsistentIndex = RoundsEngine.holeData.findIndex((hole) => (
+      hole.putts > hole.strokes || (hole.penalty || 0) > hole.strokes
+    ));
+    if (inconsistentIndex >= 0) {
+      RoundsEngine.selectHole(inconsistentIndex);
+      App.showToast(`Revisá putts y penalidades del hoyo ${inconsistentIndex + 1}.`);
+      return;
+    }
+
+    const saveButton = document.getElementById('round-save-btn');
+    if (saveButton?.disabled) return;
+    if (saveButton) {
+      saveButton.disabled = true;
+      saveButton.textContent = 'Guardando ronda…';
+    }
 
     let totalScore = 0;
     let totalPar = 0;
@@ -657,7 +724,7 @@ class RoundsEngine {
     let fairwaysHit = 0;
     let fairwaysTotal = 0;
     let girHit = 0;
-    let girTotal = RoundsEngine.holeData.length;
+    let girTotal = 0;
     let penalties = 0;
     let bunkerSaves = 0;
     let bunkersTotal = 0;
@@ -666,11 +733,14 @@ class RoundsEngine {
       totalScore += h.strokes;
       totalPar += h.par;
       totalPutts += h.putts;
-      if (h.par > 3) {
+      if (h.par > 3 && typeof h.fir === 'boolean') {
         fairwaysTotal++;
         if (h.fir) fairwaysHit++;
       }
-      if (h.gir) girHit++;
+      if (typeof h.gir === 'boolean') {
+        girTotal++;
+        if (h.gir) girHit++;
+      }
       if (h.bunker) {
         bunkersTotal++;
         if (h.strokes <= h.par) bunkerSaves++;
@@ -718,6 +788,10 @@ class RoundsEngine {
     } catch (error) {
       console.error('No se pudo guardar la ronda:', error);
       App.showToast('No se pudo guardar la ronda.');
+      if (saveButton) {
+        saveButton.disabled = false;
+        saveButton.textContent = '💾 Guardar Ronda';
+      }
     }
   }
 }

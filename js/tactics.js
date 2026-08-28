@@ -105,28 +105,28 @@ class TacticsEngine {
 
         <div class="grid-2" style="margin-top: 1.25rem;">
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 style="color: var(--gold-400); margin-bottom: 0.4rem;">🎯 1. Olvida la Bandera en los Pares 3</h4>
+            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">🎯 1. Olvida la Bandera en los Pares 3</h4>
             <p style="font-size: 0.88rem; color: var(--text-muted);">
               El 90% de los golfistas aficionados dejan golpes en los pares 3 por atacar banderas escondidas. Apunta SIEMPRE al centro geométrico del green; tu peor resultado será un cómodo putt de dos toques.
             </p>
           </div>
 
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 style="color: var(--gold-400); margin-bottom: 0.4rem;">🛡️ 2. Elimina el Lado del Peligro</h4>
+            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">🛡️ 2. Elimina el Lado del Peligro</h4>
             <p style="font-size: 0.88rem; color: var(--text-muted);">
               Si hay agua u obstáculos a la derecha del fairway, colócate a la derecha del tee y apunta hacia la izquierda. Concédele al campo el fallo en el sector seguro.
             </p>
           </div>
 
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 style="color: var(--gold-400); margin-bottom: 0.4rem;">🛑 3. El Golpe de Rescate debe ser Seguro</h4>
+            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">🛑 3. El Golpe de Rescate debe ser Seguro</h4>
             <p style="font-size: 0.88rem; color: var(--text-muted);">
               Tras caer en árboles o un mal lie, nunca intentes el golpe "milagroso" a través de una ventana estrecha. Saca la bola al fairway con hierro corto. El bogey es aceptable; el triple bogey destruye la tarjeta.
             </p>
           </div>
 
           <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 style="color: var(--gold-400); margin-bottom: 0.4rem;">📏 4. Deja tu Distancia Favorita de Wedge</h4>
+            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">📏 4. Deja tu Distancia Favorita de Wedge</h4>
             <p style="font-size: 0.88rem; color: var(--text-muted);">
               En los Pares 5, en lugar de intentar un segundo tiro forzado a 40 metros del green en posición incómoda, calcula un layup que te deje exactamente a tu distancia de swing completo de Sand Wedge (ej. 80 metros).
             </p>
@@ -195,7 +195,7 @@ class TacticsEngine {
           <div style="font-size: 0.9rem; color: var(--gold-300);">Tu carry calibrado: ${bestClub.baseCarry}m</div>
         </div>
 
-        <div style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: var(--radius-md); font-size: 0.88rem; line-height: 1.5; color: var(--text-muted);">
+        <div class="ui-icon-copy" style="background: rgba(0,0,0,0.2); padding: 1rem; border-radius: var(--radius-md); font-size: 0.88rem; line-height: 1.5; color: var(--text-muted);">
           <div style="font-weight: 700; color: var(--text-main); margin-bottom: 0.35rem;">💡 Consejos Tácticos de Ejecución:</div>
           ${windTip ? `<div>${windTip}</div>` : ''}
           ${lieTip ? `<div>${lieTip}</div>` : ''}

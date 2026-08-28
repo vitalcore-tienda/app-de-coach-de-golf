@@ -3,6 +3,8 @@
  */
 
 class PlayerEngine {
+  static selectionGeneration = 0;
+
   static escapeHTML(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -13,6 +15,12 @@ class PlayerEngine {
   }
 
   static safeNumber(value, fallback = 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  static displayNumber(value, fallback = '—') {
+    if (value === null || value === undefined || value === '') return fallback;
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
   }
@@ -30,9 +38,23 @@ class PlayerEngine {
     container.innerHTML = '<div class="card"><p style="color: var(--text-muted);">Cargando ficha de golfistas…</p></div>';
 
     try {
-      const activePlayer = StorageManager.getProfile();
-      const [players, handicapHistory, tournaments, rounds] = await Promise.all([
-        StorageManager.getPlayers(),
+      if (!StorageManager.isWorkspaceUnlocked()) {
+        container.innerHTML = '<div class="card"><h3>Espacio protegido</h3><p style="color:var(--text-muted);">Ingresá como entrenador para abrir las fichas locales.</p><button class="btn btn-primary" onclick="AuthEngine.openAccessModal()">Ingresar por correo</button></div>';
+        return;
+      }
+
+      const players = await StorageManager.getPlayers();
+      if (!players.length) {
+        container.innerHTML = App.renderEmptyWorkspaceOnboarding();
+        return;
+      }
+
+      let activePlayer = StorageManager.getProfile();
+      if (!activePlayer) {
+        await StorageManager.setActivePlayer(players[0].id);
+        activePlayer = StorageManager.getProfile();
+      }
+      const [handicapHistory, tournaments, rounds] = await Promise.all([
         StorageManager.getHandicapHistory(),
         StorageManager.getTournaments(),
         Promise.resolve(StorageManager.getRounds())
@@ -40,7 +62,7 @@ class PlayerEngine {
 
       // Si el usuario cambió de jugador mientras cargaba, se vuelve a pintar
       // con el golfista que quedó activo para no mezclar historiales.
-      if (activePlayer.id !== StorageManager.getActivePlayerId()) {
+      if (!activePlayer || activePlayer.id !== StorageManager.getActivePlayerId()) {
         return PlayerEngine.renderPlayersView();
       }
 
@@ -69,8 +91,8 @@ class PlayerEngine {
         <div class="grid-4" style="margin-bottom:1.5rem;">
           <div class="card stat-card">
             <div class="stat-label">Hándicap actual</div>
-            <div class="stat-value" style="color:var(--gold-400);">${PlayerEngine.safeNumber(activePlayer.handicap, 0)}</div>
-            <div class="stat-sub gold">Meta: ${PlayerEngine.safeNumber(activePlayer.targetHandicap, 0)}</div>
+            <div class="stat-value" style="color:var(--gold-400);">${PlayerEngine.displayNumber(activePlayer.handicap)}</div>
+            <div class="stat-sub gold">Meta: ${PlayerEngine.displayNumber(activePlayer.targetHandicap)}</div>
           </div>
           <div class="card stat-card">
             <div class="stat-label">Rondas cargadas</div>
@@ -171,6 +193,7 @@ class PlayerEngine {
 
   static renderPlayerCard(player, activePlayerId) {
     const selected = player.id === activePlayerId;
+    const isDemo = StorageManager.isDemoPlayer(player);
     const playerId = PlayerEngine.escapeHTML(player.id);
     const playerName = String(player.name ?? '');
     return `
@@ -179,7 +202,8 @@ class PlayerEngine {
           <div class="player-avatar">${PlayerEngine.escapeHTML(playerName.charAt(0).toUpperCase())}</div>
           <div style="min-width:0;">
             <div style="font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${PlayerEngine.escapeHTML(playerName)}</div>
-            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">HCP ${PlayerEngine.safeNumber(player.handicap, 0)} · Meta ${PlayerEngine.safeNumber(player.targetHandicap, 0)}</div>
+            <div style="font-size:0.78rem; color:var(--text-muted); margin-top:0.15rem;">HCP ${PlayerEngine.displayNumber(player.handicap)} · Meta ${PlayerEngine.displayNumber(player.targetHandicap)}</div>
+            ${isDemo ? '<div class="badge badge-gold" style="margin-top:0.4rem;">🧪 Modo demo · sin nube</div>' : ''}
           </div>
         </div>
         <div style="font-size:0.75rem; color:${selected ? 'var(--gold-400)' : 'var(--text-subtle)'}; margin-top:0.7rem;">${selected ? '● Golfista seleccionado' : 'Seleccionar ficha →'}</div>
@@ -233,8 +257,10 @@ class PlayerEngine {
 
   static async selectPlayer(playerId) {
     if (playerId === StorageManager.getActivePlayerId()) return;
+    const generation = ++PlayerEngine.selectionGeneration;
     try {
       await StorageManager.setActivePlayer(playerId);
+      if (generation !== PlayerEngine.selectionGeneration || playerId !== StorageManager.getActivePlayerId()) return;
       App.updateProfileDisplay();
       App.renderDashboard();
       if (window.RoundsEngine) RoundsEngine.renderRoundsView();
@@ -247,78 +273,126 @@ class PlayerEngine {
   }
 
   static openNewPlayerModal() {
+    if (!StorageManager.isWorkspaceUnlocked()) {
+      AuthEngine.openAccessModal();
+      return;
+    }
     const modalContent = document.getElementById('global-modal-content');
     if (!modalContent) return;
     modalContent.innerHTML = `
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
-        <div><span class="badge badge-gold">Nuevo golfista</span><h3 style="margin-top:0.3rem;">Crear ficha de jugador</h3></div>
+        <div><span class="badge badge-gold">Paso 2 de 3</span><h3 style="margin-top:0.3rem;">Crear ficha de golfista</h3></div>
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
-      ${PlayerEngine.playerFormFields({ handicap: 18, targetHandicap: 12, dominantHand: 'Diestro', experienceYears: 0, driverDistanceAvg: 0 }, 'new-player')}
-      <button class="btn btn-primary" style="width:100%; min-height:48px; margin-top:0.4rem;" onclick="PlayerEngine.saveNewPlayer()">💾 Crear y seleccionar golfista</button>
+      <p style="margin-top:-0.45rem; color:var(--text-muted); line-height:1.5;">Empezá con lo indispensable. Los datos de contacto y deportivos adicionales se pueden completar después.</p>
+      <form id="new-player-form" onsubmit="event.preventDefault(); PlayerEngine.saveNewPlayer();">
+        ${PlayerEngine.playerFormFields({ handicap: '', targetHandicap: '', dominantHand: 'Diestro', experienceYears: 0, driverDistanceAvg: '' }, 'new-player', { onboarding: true })}
+        <div class="form-status" id="new-player-status" role="status" aria-live="polite"></div>
+        <button class="btn btn-primary" type="submit" id="new-player-save-btn" style="width:100%; min-height:48px; margin-top:0.4rem;">Crear y seleccionar golfista</button>
+      </form>
     `;
     App.openModal();
+    window.setTimeout(() => document.getElementById('new-player-name')?.focus(), 0);
   }
 
-  static playerFormFields(profile, prefix) {
+  static playerFormFields(profile, prefix, { onboarding = false } = {}) {
     const field = (name) => `${prefix}-${name}`;
     const value = (name) => PlayerEngine.escapeHTML(profile[name] ?? '');
+    const requiredFields = `
+      <div class="form-section">
+        <div class="form-section-title">Datos indispensables</div>
+        <div class="form-group"><label class="form-label" for="${field('name')}">Nombre completo *</label><input class="form-control" id="${field('name')}" value="${value('name')}" placeholder="Nombre del golfista" maxlength="120" required></div>
+        <div class="grid-2">
+          <div class="form-group"><label class="form-label" for="${field('handicap')}">Hándicap actual *</label><input type="number" min="-10" max="54" step="0.1" class="form-control" id="${field('handicap')}" value="${value('handicap')}" required></div>
+          <div class="form-group"><label class="form-label" for="${field('targetHandicap')}">Hándicap meta</label><input type="number" min="-10" max="54" step="0.1" class="form-control" id="${field('targetHandicap')}" value="${value('targetHandicap')}" placeholder="Opcional"></div>
+        </div>
+      </div>
+    `;
+    const optionalFields = `
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label" for="${field('email')}">Email</label><input type="email" class="form-control" id="${field('email')}" value="${value('email')}" placeholder="nombre@email.com" maxlength="254"></div>
+        <div class="form-group"><label class="form-label" for="${field('phone')}">Teléfono</label><input class="form-control" id="${field('phone')}" value="${value('phone')}" placeholder="Contacto" maxlength="40"></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label" for="${field('federationLicense')}">Licencia federativa</label><input class="form-control" id="${field('federationLicense')}" value="${value('federationLicense')}" placeholder="Opcional" maxlength="80"></div>
+        <div class="form-group"><label class="form-label" for="${field('homeClub')}">Club principal</label><input class="form-control" id="${field('homeClub')}" value="${value('homeClub')}" placeholder="Club de golf" maxlength="120"></div>
+      </div>
+      <div class="grid-3">
+        <div class="form-group"><label class="form-label" for="${field('dominantHand')}">Mano dominante</label><select class="form-control" id="${field('dominantHand')}"><option ${profile.dominantHand === 'Diestro' ? 'selected' : ''}>Diestro</option><option ${profile.dominantHand === 'Zurdo' ? 'selected' : ''}>Zurdo</option></select></div>
+        <div class="form-group"><label class="form-label" for="${field('experienceYears')}">Años de experiencia</label><input type="number" min="0" max="100" class="form-control" id="${field('experienceYears')}" value="${value('experienceYears')}"></div>
+        <div class="form-group"><label class="form-label" for="${field('birthDate')}">Fecha de nacimiento</label><input type="date" class="form-control" id="${field('birthDate')}" value="${value('birthDate')}"></div>
+      </div>
+      <div class="grid-2">
+        <div class="form-group"><label class="form-label" for="${field('driverDistanceAvg')}">Carry Driver (m)</label><input type="number" min="0" max="500" class="form-control" id="${field('driverDistanceAvg')}" value="${value('driverDistanceAvg')}"></div>
+        <div class="form-group"><label class="form-label" for="${field('playerCategory')}">Categoría / nivel</label><input class="form-control" id="${field('playerCategory')}" value="${value('playerCategory')}" placeholder="Ej.: Amateur competitivo" maxlength="100"></div>
+      </div>
+    `;
+    if (onboarding) {
+      return `${requiredFields}<details class="optional-fields"><summary>Agregar datos opcionales</summary><div class="optional-fields-content">${optionalFields}</div></details>`;
+    }
     return `
-      <div class="form-group"><label class="form-label">Nombre completo *</label><input class="form-control" id="${field('name')}" value="${value('name')}" placeholder="Nombre del golfista"></div>
-      <div class="grid-2">
-        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-control" id="${field('email')}" value="${value('email')}" placeholder="nombre@email.com"></div>
-        <div class="form-group"><label class="form-label">Teléfono</label><input class="form-control" id="${field('phone')}" value="${value('phone')}" placeholder="Contacto"></div>
-      </div>
-      <div class="grid-3">
-        <div class="form-group"><label class="form-label">Hándicap actual</label><input type="number" min="-10" max="54" step="0.1" class="form-control" id="${field('handicap')}" value="${value('handicap')}"></div>
-        <div class="form-group"><label class="form-label">Hándicap meta</label><input type="number" min="-10" max="54" step="0.1" class="form-control" id="${field('targetHandicap')}" value="${value('targetHandicap')}"></div>
-        <div class="form-group"><label class="form-label">Licencia federativa</label><input class="form-control" id="${field('federationLicense')}" value="${value('federationLicense')}" placeholder="Opcional"></div>
-      </div>
-      <div class="grid-2">
-        <div class="form-group"><label class="form-label">Club principal</label><input class="form-control" id="${field('homeClub')}" value="${value('homeClub')}" placeholder="Club de golf"></div>
-        <div class="form-group"><label class="form-label">Carry Driver (m)</label><input type="number" min="0" class="form-control" id="${field('driverDistanceAvg')}" value="${value('driverDistanceAvg')}"></div>
-      </div>
-      <div class="grid-3">
-        <div class="form-group"><label class="form-label">Mano dominante</label><select class="form-control" id="${field('dominantHand')}"><option ${profile.dominantHand === 'Diestro' ? 'selected' : ''}>Diestro</option><option ${profile.dominantHand === 'Zurdo' ? 'selected' : ''}>Zurdo</option></select></div>
-        <div class="form-group"><label class="form-label">Años de experiencia</label><input type="number" min="0" max="100" class="form-control" id="${field('experienceYears')}" value="${value('experienceYears')}"></div>
-        <div class="form-group"><label class="form-label">Fecha de nacimiento</label><input type="date" class="form-control" id="${field('birthDate')}" value="${value('birthDate')}"></div>
-      </div>
-      <div class="form-group"><label class="form-label">Categoría / nivel</label><input class="form-control" id="${field('playerCategory')}" value="${value('playerCategory')}" placeholder="Ej.: Amateur competitivo"></div>
+      ${requiredFields}
+      ${optionalFields}
     `;
   }
 
   static readPlayerForm(prefix) {
     const read = (name) => document.getElementById(`${prefix}-${name}`)?.value?.trim() || '';
+    const readNumber = (name) => {
+      const value = read(name);
+      return value === '' ? null : Number(value);
+    };
     return {
       name: read('name'),
       email: read('email'),
       phone: read('phone'),
-      handicap: Number(read('handicap')),
-      targetHandicap: Number(read('targetHandicap')),
+      handicap: readNumber('handicap'),
+      targetHandicap: readNumber('targetHandicap'),
       federationLicense: read('federationLicense'),
       homeClub: read('homeClub'),
-      driverDistanceAvg: Number(read('driverDistanceAvg')),
+      driverDistanceAvg: readNumber('driverDistanceAvg'),
       dominantHand: read('dominantHand'),
-      experienceYears: Number(read('experienceYears')),
+      experienceYears: readNumber('experienceYears'),
       birthDate: read('birthDate'),
       playerCategory: read('playerCategory')
     };
   }
 
   static async saveNewPlayer() {
+    const button = document.getElementById('new-player-save-btn');
+    const status = document.getElementById('new-player-status');
     try {
+      if (button?.disabled) return;
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Creando ficha…';
+      }
+      if (status) {
+        status.textContent = '';
+        status.classList.remove('error');
+      }
       const data = PlayerEngine.readPlayerForm('new-player');
       if (!data.name) throw new Error('Ingresá el nombre del golfista.');
       if (!Number.isFinite(data.handicap) || data.handicap < -10 || data.handicap > 54) throw new Error('Ingresá un hándicap válido.');
       await StorageManager.createPlayer(data);
       App.closeModal();
+      App.updateWorkspaceVisibility();
       App.updateProfileDisplay();
       App.renderDashboard();
       await PlayerEngine.renderPlayersView();
-      App.showToast('✅ Golfista creado y seleccionado.');
+      App.showToast('✅ Ficha creada. Ya podés empezar el seguimiento.');
     } catch (error) {
-      App.showToast(error.message || 'No se pudo crear el golfista.');
+      const message = error.message || 'No se pudo crear el golfista.';
+      if (status) {
+        status.textContent = message;
+        status.classList.add('error');
+      }
+      App.showToast(message);
+      if (button) {
+        button.disabled = false;
+        button.textContent = '💾 Crear y seleccionar golfista';
+      }
     }
   }
 
@@ -326,7 +400,7 @@ class PlayerEngine {
     const profile = StorageManager.getProfile();
     const modalContent = document.getElementById('global-modal-content');
     if (!modalContent) return;
-    const today = new Date().toISOString().split('T')[0];
+    const today = GolfUtils.localDateISO();
     modalContent.innerHTML = `
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
@@ -339,13 +413,21 @@ class PlayerEngine {
       </div>
       <div class="form-group"><label class="form-label">Origen</label><select class="form-control" id="handicap-source-input"><option>Manual</option><option>Oficial</option><option>Estimado por coach</option></select></div>
       <div class="form-group"><label class="form-label">Notas</label><input class="form-control" id="handicap-notes-input" placeholder="Ej.: actualización federativa de agosto"></div>
-      <button class="btn btn-primary" style="width:100%; min-height:48px; margin-top:0.4rem;" onclick="PlayerEngine.saveHandicapRecord()">💾 Guardar hándicap</button>
+      <div class="form-status" id="handicap-save-status" role="status" aria-live="polite"></div>
+      <button class="btn btn-primary" id="handicap-save-btn" style="width:100%; min-height:48px; margin-top:0.4rem;" onclick="PlayerEngine.saveHandicapRecord()">Guardar hándicap</button>
     `;
     App.openModal();
   }
 
   static async saveHandicapRecord() {
+    const button = document.getElementById('handicap-save-btn');
+    const status = document.getElementById('handicap-save-status');
+    if (button?.disabled) return;
     try {
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Guardando…';
+      }
       await StorageManager.addHandicapRecord({
         date: document.getElementById('handicap-date-input')?.value,
         handicap: document.getElementById('handicap-value-input')?.value,
@@ -358,12 +440,21 @@ class PlayerEngine {
       await PlayerEngine.renderPlayersView();
       App.showToast('📈 Hándicap registrado.');
     } catch (error) {
-      App.showToast(error.message || 'No se pudo guardar el hándicap.');
+      const message = error.message || 'No se pudo guardar el hándicap.';
+      if (status) {
+        status.textContent = message;
+        status.classList.add('error');
+      }
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Guardar hándicap';
+      }
+      App.showToast(message);
     }
   }
 
   static openTournamentModal() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = GolfUtils.localDateISO();
     const modalContent = document.getElementById('global-modal-content');
     if (!modalContent) return;
     modalContent.innerHTML = `
@@ -391,13 +482,21 @@ class PlayerEngine {
         <div class="form-group"><label class="form-label">Score total</label><input type="number" class="form-control" id="tournament-score-input" placeholder="Opcional"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label><input class="form-control" id="tournament-notes-input" placeholder="Objetivo, sensaciones o resultado"></div>
-      <button class="btn btn-primary" style="width:100%; min-height:48px; margin-top:0.4rem;" onclick="PlayerEngine.saveTournament()">💾 Guardar torneo</button>
+      <div class="form-status" id="tournament-save-status" role="status" aria-live="polite"></div>
+      <button class="btn btn-primary" id="tournament-save-btn" style="width:100%; min-height:48px; margin-top:0.4rem;" onclick="PlayerEngine.saveTournament()">Guardar torneo</button>
     `;
     App.openModal();
   }
 
   static async saveTournament() {
+    const button = document.getElementById('tournament-save-btn');
+    const status = document.getElementById('tournament-save-status');
+    if (button?.disabled) return;
     try {
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Guardando…';
+      }
       await StorageManager.saveTournament({
         name: document.getElementById('tournament-name-input')?.value,
         startDate: document.getElementById('tournament-start-input')?.value,
@@ -415,7 +514,16 @@ class PlayerEngine {
       await PlayerEngine.renderPlayersView();
       App.showToast('🏆 Torneo guardado.');
     } catch (error) {
-      App.showToast(error.message || 'No se pudo guardar el torneo.');
+      const message = error.message || 'No se pudo guardar el torneo.';
+      if (status) {
+        status.textContent = message;
+        status.classList.add('error');
+      }
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Guardar torneo';
+      }
+      App.showToast(message);
     }
   }
 }

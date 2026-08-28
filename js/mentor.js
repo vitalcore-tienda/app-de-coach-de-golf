@@ -8,7 +8,7 @@ const COACH_KNOWLEDGE_BASE = [
     triggers: ['slice', 'driver', 'derecha', 'desviado'],
     response: `El slice suele ser provocado por dos factores combinados: un camino de swing "Over the top" (de afuera hacia adentro) y una cara del palo abierta en el impacto. 
 
-💡 **3 Correcciones Clave del Coach:**
+**3 correcciones clave del coach:**
 1. **Grip**: Asegúrate de ver 2 a 3 nudillos de tu mano izquierda al colocarte en el stance (evita el grip débil).
 2. **Cuerpo cerrado en el set-up**: Alinea tus hombros levemente paralelos o apuntando a la derecha del objetivo.
 3. **Drill de la Varilla**: Practica con una varilla clavada detrás de ti para forzar a que las manos bajen por el interior (in-to-out).`
@@ -17,7 +17,7 @@ const COACH_KNOWLEDGE_BASE = [
     triggers: ['putt', 'tripateo', 'tres putts', 'green', 'distancia'],
     response: `El 80% de los tripateos en golf amateur no se deben a una mala lectura de línea, sino a una deficiente **gestión de la velocidad** en el primer putt largo.
 
-💡 **Recomendación para el Putting:**
+**Recomendación para el putting:**
 1. **Control de Distancia**: En el putting green, haz el *Ladder Drill* (de 5 a 12 metros). El objetivo es que la bola nunca quede a más de 50 cm del hoyo.
 2. **Stroke con los hombros**: Bloquea las muñecas; el movimiento debe ser un péndulo puro generado por el triángulo hombros-pecho.
 3. **No levantes la vista antes de tiempo**: Escucha la bola caer antes de mirar el hoyo.`
@@ -26,7 +26,7 @@ const COACH_KNOWLEDGE_BASE = [
     triggers: ['mente', 'mental', 'nervios', 'presión', 'frustración', 'primer tee', 'miedo'],
     response: `Como decía el legendario Bobby Jones, *"El golf es un juego que se juega en un campo de 12 centímetros: el espacio entre tus orejas"*.
 
-💡 **Estrategia Mental SotaPar:**
+**Estrategia mental SotaPar:**
 1. **Rutina Pre-Golpe Invariable**: Tu rutina es tu ancla de seguridad bajo presión. Respira hondo antes de cuadrar la cara del palo.
 2. **La Regla de los 10 Pasos**: Tienes 10 pasos tras un mal golpe para desahogarte. Al paso 11, ese tiro ya no existe.
 3. **Prueba el Box Breathing**: Inhala 4s, retén 4s, exhala 4s. Esto normaliza tus pulsaciones inmediatamente.`
@@ -35,7 +35,7 @@ const COACH_KNOWLEDGE_BASE = [
     triggers: ['bunker', 'arena', 'sacada', 'enterrada'],
     response: `El bunker no requiere fuerza, sino **comprender el uso del bounce** de la suela de tu Sand Wedge.
 
-💡 **Claves para la Arena:**
+**Claves para la arena:**
 1. **Abre la cara ANTES de coger el grip**, no después.
 2. **Entrada en la arena**: El palo debe golpear la arena unos 3-4 cm antes de la bola; es la capa de arena la que expulsa la bola suavemente.
 3. **No desaceleres en el impacto**: Mantén la aceleración hasta un finish completo y alto.`
@@ -44,7 +44,7 @@ const COACH_KNOWLEDGE_BASE = [
     triggers: ['bajar handicap', 'hándicap', '100', '90', '80', 'mejorar'],
     response: `Para bajar de 90 golpes no necesitas pegar drives de 280 metros, necesitas **eliminar los errores graves** (dobles bogeys o pérdidas de bola).
 
-💡 **Plan de Acción para Bajar Hándicap:**
+**Plan de acción para bajar hándicap:**
 1. **Asegura la salida**: Si el driver tiene riesgo de out of bounds, juega madera o híbrido al centro.
 2. **Juego corto (50% de tu práctica)**: Dedica la mitad de tus sesiones al chip y putt dentro de 2 metros.
 3. **Apunta al centro del green**: Deja de atacar banderas comprometidas y garantiza dos putts para par o bogey fácil.`
@@ -59,6 +59,8 @@ const COACH_KNOWLEDGE_BASE = [
 ];
 
 class MentorEngine {
+  static sendingMessage = false;
+
   static escapeHTML(value) {
     return String(value ?? '')
       .replace(/&/g, '&amp;')
@@ -175,7 +177,9 @@ class MentorEngine {
           </div>
 
           <div class="chat-messages" id="chat-messages-box">
-            ${chatHistory.map((message) => MentorEngine.renderChatMessage(message)).join('')}
+            ${chatHistory.length
+              ? chatHistory.map((message) => MentorEngine.renderChatMessage(message)).join('')
+              : '<div class="portal-empty-state">Todavía no hay conversación. Escribí una consulta concreta para empezar.</div>'}
           </div>
 
           <!-- Quick prompts -->
@@ -188,7 +192,7 @@ class MentorEngine {
 
           <div class="chat-input-bar">
             <input type="text" class="form-control" id="chat-input-field" placeholder="Pregunta al Coach sobre swing, mente, putts..." onkeypress="if(event.key==='Enter') MentorEngine.sendMessage()">
-            <button class="btn btn-primary" onclick="MentorEngine.sendMessage()">Enviar</button>
+            <button class="btn btn-primary" id="chat-send-btn" onclick="MentorEngine.sendMessage()">Enviar</button>
           </div>
         </div>
 
@@ -205,7 +209,9 @@ class MentorEngine {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 1rem;">
-              ${goals.map((goal) => MentorEngine.renderGoal(goal)).join('')}
+              ${goals.length
+                ? goals.map((goal) => MentorEngine.renderGoal(goal)).join('')
+                : '<div class="portal-empty-state">Aún no hay metas para este golfista.<br><button class="btn btn-secondary btn-sm" style="margin-top:0.7rem;" onclick="MentorEngine.openNewGoalModal()">Crear primera meta</button></div>'}
             </div>
           </div>
 
@@ -220,7 +226,9 @@ class MentorEngine {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 0.85rem; max-height: 220px; overflow-y: auto;">
-              ${notes.map((note) => MentorEngine.renderNote(note)).join('')}
+              ${notes.length
+                ? notes.map((note) => MentorEngine.renderNote(note)).join('')
+                : '<div class="portal-empty-state">El diario está vacío. Las primeras sensaciones se guardarán cuando las escribas.</div>'}
             </div>
           </div>
         </div>
@@ -230,28 +238,27 @@ class MentorEngine {
     MentorEngine.scrollChatToBottom();
   }
 
-  static sendMessage() {
+  static async sendMessage() {
     const input = document.getElementById('chat-input-field');
-    if (!input || !input.value.trim()) return;
+    const button = document.getElementById('chat-send-btn');
+    if (MentorEngine.sendingMessage || !input || !input.value.trim()) return;
 
+    const playerId = StorageManager.getActivePlayerId();
+    if (!playerId) {
+      App.showToast('Primero seleccioná un golfista.');
+      return;
+    }
     const userText = input.value.trim();
+    MentorEngine.sendingMessage = true;
+    if (button) button.disabled = true;
     input.value = '';
 
     const history = StorageManager.getChatHistory();
     const timeNow = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-    // Push user message
-    history.push({
-      sender: 'user',
-      text: userText,
-      time: timeNow
-    });
-
-    StorageManager.saveChatHistory(history);
-    MentorEngine.renderChatMessagesOnly();
-
-    // Generate intelligent response based on keywords
-    setTimeout(() => {
+    try {
+      // Generate intelligent response based on keywords
+      await new Promise((resolve) => window.setTimeout(resolve, 600));
       const lower = userText.toLowerCase();
       let reply = `Excelente punto. En el golf, cada dificultad es una oportunidad para afianzar tu rutina y comprensión del movimiento. Te recomiendo trabajar este aspecto en bloques de 20 minutos con el temporizador Pomodoro y anotar tus sensaciones en tu diario.`;
 
@@ -262,15 +269,25 @@ class MentorEngine {
         }
       }
 
+      history.push({ sender: 'user', text: userText, time: timeNow });
       history.push({
         sender: 'coach',
         text: reply,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       });
 
-      StorageManager.saveChatHistory(history);
-      MentorEngine.renderChatMessagesOnly();
-    }, 600);
+      await StorageManager.savePlayerDataFor(playerId, STORAGE_KEYS.CHAT_HISTORY, history);
+      if (StorageManager.getActivePlayerId() === playerId) MentorEngine.renderChatMessagesOnly();
+    } catch (error) {
+      console.error('No se pudo guardar el mensaje:', error);
+      if (StorageManager.getActivePlayerId() === playerId) {
+        input.value = userText;
+        App.showToast('No se pudo guardar el mensaje. Intentá nuevamente.');
+      }
+    } finally {
+      MentorEngine.sendingMessage = false;
+      if (button?.isConnected) button.disabled = false;
+    }
   }
 
   static sendQuickPrompt(promptText) {
@@ -286,7 +303,9 @@ class MentorEngine {
     if (!box) return;
 
     const history = StorageManager.getChatHistory();
-    box.innerHTML = history.map((message) => MentorEngine.renderChatMessage(message)).join('');
+    box.innerHTML = history.length
+      ? history.map((message) => MentorEngine.renderChatMessage(message)).join('')
+      : '<div class="portal-empty-state">Todavía no hay conversación. Escribí una consulta concreta para empezar.</div>';
 
     MentorEngine.scrollChatToBottom();
   }
@@ -296,16 +315,17 @@ class MentorEngine {
     if (box) box.scrollTop = box.scrollHeight;
   }
 
-  static clearChat() {
-    const defaultChat = [
-      {
-        sender: 'coach',
-        text: 'Historial reiniciado. Estoy listo para ayudarte con cualquier consulta de tu juego.',
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }
-    ];
-    StorageManager.saveChatHistory(defaultChat);
-    MentorEngine.renderChatMessagesOnly();
+  static async clearChat() {
+    if (!StorageManager.getChatHistory().length) return;
+    if (!window.confirm('¿Querés eliminar toda la conversación guardada para este golfista?')) return;
+    try {
+      await StorageManager.saveChatHistory([]);
+      MentorEngine.renderChatMessagesOnly();
+      App.showToast('Conversación eliminada de esta ficha.');
+    } catch (error) {
+      console.error('No se pudo limpiar la conversación:', error);
+      App.showToast('No se pudo limpiar la conversación. Intentá nuevamente.');
+    }
   }
 
   static openNewGoalModal() {
@@ -340,7 +360,7 @@ class MentorEngine {
         </div>
         <div class="form-group">
           <label class="form-label">Fecha Objetivo</label>
-          <input type="date" class="form-control" id="goal-date-input" value="${new Date().toISOString().split('T')[0]}">
+          <input type="date" class="form-control" id="goal-date-input" value="${GolfUtils.localDateISO()}">
         </div>
       </div>
 
@@ -350,14 +370,14 @@ class MentorEngine {
       </div>
 
       <div style="margin-top: 1.5rem; text-align: right;">
-        <button class="btn btn-primary" onclick="MentorEngine.saveNewGoal()">Guardar Meta</button>
+        <button class="btn btn-primary" id="goal-save-btn" onclick="MentorEngine.saveNewGoal()">Guardar Meta</button>
       </div>
     `;
 
     App.openModal();
   }
 
-  static saveNewGoal() {
+  static async saveNewGoal() {
     const title = document.getElementById('goal-title-input')?.value || '';
     const category = document.getElementById('goal-cat-select')?.value || 'Handicap';
     const targetDate = document.getElementById('goal-date-input')?.value || '';
@@ -370,17 +390,26 @@ class MentorEngine {
 
     const goals = StorageManager.getGoals();
     goals.push({
-      id: 'g_' + Date.now(),
+      id: StorageManager.makeId('goal'),
       title,
       category,
       targetDate,
       progress
     });
 
-    StorageManager.saveGoals(goals);
-    App.closeModal();
-    App.showToast('🎯 Meta guardada en tu plan de temporada.');
-    MentorEngine.renderMentorView();
+    const button = document.getElementById('goal-save-btn');
+    if (button?.disabled) return;
+    try {
+      if (button) button.disabled = true;
+      await StorageManager.saveGoals(goals);
+      App.closeModal();
+      App.showToast('🎯 Meta guardada en tu plan de temporada.');
+      MentorEngine.renderMentorView();
+    } catch (error) {
+      console.error('No se pudo guardar la meta:', error);
+      if (button) button.disabled = false;
+      App.showToast('No se pudo guardar la meta. Intentá nuevamente.');
+    }
   }
 
   static openNewNoteModal() {
@@ -408,14 +437,14 @@ class MentorEngine {
       </div>
 
       <div style="margin-top: 1.5rem; text-align: right;">
-        <button class="btn btn-primary" onclick="MentorEngine.saveNewNote()">Guardar en el Diario</button>
+        <button class="btn btn-primary" id="note-save-btn" onclick="MentorEngine.saveNewNote()">Guardar en el Diario</button>
       </div>
     `;
 
     App.openModal();
   }
 
-  static saveNewNote() {
+  static async saveNewNote() {
     const title = document.getElementById('note-title-input')?.value || '';
     const content = document.getElementById('note-content-input')?.value || '';
 
@@ -426,17 +455,26 @@ class MentorEngine {
 
     const notes = StorageManager.getNotes();
     notes.unshift({
-      id: 'n_' + Date.now(),
-      date: new Date().toISOString().split('T')[0],
+      id: StorageManager.makeId('note'),
+      date: GolfUtils.localDateISO(),
       title,
       content,
       category: 'General'
     });
 
-    StorageManager.saveNotes(notes);
-    App.closeModal();
-    App.showToast('📝 Entrada guardada en tu diario de sensaciones.');
-    MentorEngine.renderMentorView();
+    const button = document.getElementById('note-save-btn');
+    if (button?.disabled) return;
+    try {
+      if (button) button.disabled = true;
+      await StorageManager.saveNotes(notes);
+      App.closeModal();
+      App.showToast('📝 Entrada guardada en tu diario de sensaciones.');
+      MentorEngine.renderMentorView();
+    } catch (error) {
+      console.error('No se pudo guardar la nota:', error);
+      if (button) button.disabled = false;
+      App.showToast('No se pudo guardar la nota. Intentá nuevamente.');
+    }
   }
 }
 

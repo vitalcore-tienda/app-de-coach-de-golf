@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>GolfCoach · prueba de bloqueo por sesión</title>
+</head>
+<body>
+  <h1>Prueba de bloqueo por sesión</h1>
+  <pre id="result">Ejecutando…</pre>
+
+  <script>
+    const token = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const coachId = `test-coach-${token}`;
+    const coachUser = { id: coachId, email: `coach-${token}@example.test` };
+    const coachProfile = { id: coachId, email: coachUser.email, display_name: 'Coach Test', account_role: 'coach' };
+    let profileLookupError = null;
+    let profileMissing = false;
+
+    window.App = {
+      ready: false,
+      updateWorkspaceContext() {},
+      async onWorkspaceAccessChanged() {},
+      closeModal() {},
+      showToast() {}
+    };
+    window.CloudSync = { updateButton() {}, async onAuthStateChanged() {} };
+    window.PlayerPortal = { async onAuthStateChanged() {} };
+    window.supabase = {
+      createClient() {
+        return {
+          auth: {
+            onAuthStateChange() {},
+            async getSession() { return { data: { session: { user: coachUser } } }; },
+            async getUser() { return { data: { user: coachUser }, error: null }; },
+            async signOut() { return { error: null }; }
+          },
+          from() {
+            return {
+              select() { return this; },
+              eq() { return this; },
+              async maybeSingle() { return { data: profileLookupError || profileMissing ? null : coachProfile, error: profileLookupError }; }
+            };
+          }
+        };
+      }
+    };
+  </script>
+  <script src="../js/utils.js?test=v18"></script>
+  <script src="../js/database.js?test=v18"></script>
+  <script src="../js/storage.js?test=v18"></script>
+  <script src="../js/auth.js?test=v18"></script>
+  <script>
+    (async () => {
+      const result = document.getElementById('result');
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+
+      try {
+        await StorageManager.initialize();
+        assert(!StorageManager.isWorkspaceUnlocked(), 'La base comienza bloqueada');
+        await AuthEngine.initialize();
+        assert(StorageManager.workspaceOwnerId === coachId, 'Una cuenta coach desbloquea solo su ownerId');
+        await StorageManager.createPlayer({ name: `Jugador ${token}`, handicap: 20, targetHandicap: 15 });
+        assert(StorageManager.getProfile()?.ownerId === coachId, 'La ficha nueva hereda el dueño autenticado');
+        profileLookupError = { message: 'permission denied' };
+        await AuthEngine.refreshIdentity();
+        assert(!StorageManager.isWorkspaceUnlocked(), 'Un error de permisos al verificar el rol bloquea el workspace');
+        profileLookupError = null;
+        await AuthEngine.refreshIdentity();
+        assert(StorageManager.workspaceOwnerId === coachId, 'Una verificación válida vuelve a abrir el workspace correcto');
+        StorageManager.lockWorkspace();
+        AuthEngine.user = null;
+        AuthEngine.profile = null;
+        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+        await AuthEngine.refreshIdentity();
+        assert(StorageManager.workspaceOwnerId === coachId, 'Offline solo abre el rol verificado y guardado de la misma sesión');
+        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        profileMissing = true;
+        await AuthEngine.refreshIdentity();
+        assert(!StorageManager.isWorkspaceUnlocked(), 'La ausencia confirmada del perfil revoca el acceso local');
+        Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+        await AuthEngine.refreshIdentity();
+        assert(!StorageManager.isWorkspaceUnlocked(), 'Un rol revocado no reaparece al quedar offline');
+        Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+        profileMissing = false;
+        await AuthEngine.refreshIdentity();
+        await AuthEngine.signOut();
+        assert(!StorageManager.isWorkspaceUnlocked(), 'Cerrar sesión vuelve a bloquear el workspace');
+        assert(StorageManager.getProfile() === null, 'Cerrar sesión limpia la ficha activa');
+
+        result.dataset.status = 'passed';
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+      } catch (error) {
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'failed';
+        result.textContent = JSON.stringify({ passed: false, checks, error: error.message }, null, 2);
+      }
+    })();
+  </script>
+</body>
+</html>

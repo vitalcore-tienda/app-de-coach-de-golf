@@ -73,7 +73,9 @@ class CloudSync {
     button.hidden = !enabled;
     if (!enabled) return;
 
-    button.textContent = '☁️';
+    const icon = button.querySelector('.topbar-action-icon');
+    if (icon) icon.textContent = '☁️';
+    else button.textContent = '☁️';
     button.title = 'Respaldo y sincronización cloud';
     button.setAttribute('aria-label', button.title);
   }
@@ -105,12 +107,19 @@ class CloudSync {
   static async queueLocalPlayer(playerId) {
     const ownerId = CloudSync.currentOwnerId();
     if (!ownerId || !playerId || !(await CloudSync.isEnabled(ownerId))) return false;
-    await CloudSync.queuePlayer(ownerId, playerId);
+    if (StorageManager.workspaceOwnerId !== ownerId || !(await StorageManager.ownsPlayer(playerId))) {
+      console.warn('Se omitió un respaldo porque la ficha no pertenece al workspace autenticado.');
+      return false;
+    }
+    const queued = await CloudSync.queuePlayer(ownerId, playerId);
+    if (!queued) return false;
     CloudSync.scheduleFlush();
     return true;
   }
 
   static async queuePlayer(ownerId, playerId) {
+    const player = await GolfDatabase.get(GOLF_DATABASE.STORES.PLAYERS, playerId);
+    if (!player || player.ownerId !== ownerId || StorageManager.isDemoPlayer(player)) return false;
     const id = CloudSync.jobId(ownerId, playerId);
     const existing = await GolfDatabase.get(GOLF_DATABASE.STORES.SYNC_OUTBOX, id);
     const now = new Date().toISOString();
@@ -124,6 +133,7 @@ class CloudSync {
       attempts: existing?.attempts || 0,
       lastError: null
     });
+    return true;
   }
 
   static scheduleFlush() {
@@ -203,7 +213,8 @@ class CloudSync {
 
     try {
       await CloudSync.setEnabled(ownerId, true);
-      const players = await StorageManager.getPlayers();
+      const players = (await StorageManager.getPlayers())
+        .filter((player) => !StorageManager.isDemoPlayer(player));
       for (const player of players) {
         await CloudSync.queuePlayer(ownerId, player.id);
       }
@@ -275,20 +286,26 @@ class CloudSync {
   static async syncPlayerSnapshot(localPlayerId, ownerId) {
     const stores = GOLF_DATABASE.STORES;
     const player = await GolfDatabase.get(stores.PLAYERS, localPlayerId);
-    if (!player) return;
+    if (!player || StorageManager.isDemoPlayer(player)) return;
+    if (player.ownerId !== ownerId || StorageManager.workspaceOwnerId !== ownerId) {
+      throw new Error('La ficha local no pertenece a la cuenta autenticada.');
+    }
 
     const remotePlayerId = await CloudSync.upsertPlayer(player, ownerId);
     const [history, tournaments, rounds, documents] = await Promise.all([
       GolfDatabase.getAllByIndex(stores.HANDICAP_HISTORY, 'playerId', localPlayerId),
       GolfDatabase.getAllByIndex(stores.TOURNAMENTS, 'playerId', localPlayerId),
-      GolfDatabase.getPlayerRounds(localPlayerId),
+      GolfDatabase.getPlayerRounds(localPlayerId, ownerId),
       GolfDatabase.getAllByIndex(stores.PLAYER_DATA, 'playerId', localPlayerId)
     ]);
+    const ownedHistory = history.filter((entry) => entry.ownerId === ownerId);
+    const ownedTournaments = tournaments.filter((entry) => entry.ownerId === ownerId);
+    const ownedDocuments = documents.filter((entry) => entry.ownerId === ownerId);
 
-    await CloudSync.syncHandicapHistory(history, remotePlayerId);
-    const tournamentIds = await CloudSync.syncTournaments(tournaments, remotePlayerId);
+    await CloudSync.syncHandicapHistory(ownedHistory, remotePlayerId);
+    const tournamentIds = await CloudSync.syncTournaments(ownedTournaments, remotePlayerId);
     await CloudSync.syncRounds(rounds, remotePlayerId, tournamentIds);
-    await CloudSync.syncDocuments(documents, remotePlayerId);
+    await CloudSync.syncDocuments(ownedDocuments, remotePlayerId);
   }
 
   static async upsertPlayer(player, ownerId) {
@@ -346,7 +363,7 @@ class CloudSync {
         player_id: remotePlayerId,
         client_record_id: String(record.id),
         handicap_index: CloudSync.decimalInRange(record.handicap, -10, 54, 1),
-        effective_date: CloudSync.dateOrNull(record.date) || new Date().toISOString().slice(0, 10),
+        effective_date: CloudSync.dateOrNull(record.date) || GolfUtils.localDateISO(),
         source: CloudSync.handicapSource(record.source),
         is_current: index === 0,
         notes: CloudSync.nullableText(record.notes)
@@ -361,7 +378,7 @@ class CloudSync {
   static async syncTournaments(tournaments, remotePlayerId) {
     const remoteIds = new Map();
     for (const tournament of tournaments) {
-      const startDate = CloudSync.dateOrNull(tournament.startDate) || new Date().toISOString().slice(0, 10);
+      const startDate = CloudSync.dateOrNull(tournament.startDate) || GolfUtils.localDateISO();
       const endDate = CloudSync.dateOrNull(tournament.endDate) || startDate;
       const payload = {
         player_id: remotePlayerId,
@@ -426,7 +443,7 @@ class CloudSync {
         client_record_id: String(round.id),
         tournament_id: remoteTournamentId,
         round_number: remoteTournamentId ? (roundNumbers.get(round.id) || 1) : 1,
-        played_on: CloudSync.dateOrNull(round.date) || new Date().toISOString().slice(0, 10),
+        played_on: CloudSync.dateOrNull(round.date) || GolfUtils.localDateISO(),
         course_name: CloudSync.text(round.course, 'Club de Golf'),
         kind: CloudSync.roundKind(round.kind),
         status: 'completed',
@@ -483,7 +500,7 @@ class CloudSync {
         strokes,
         putts: CloudSync.integerInRange(hole.putts, 0, strokes),
         penalty_strokes: CloudSync.integerInRange(hole.penalty, 0, strokes) || 0,
-        fairway_hit: par > 3 ? Boolean(hole.fir) : null,
+        fairway_hit: par > 3 && typeof hole.fir === 'boolean' ? hole.fir : null,
         green_in_regulation: typeof hole.gir === 'boolean' ? hole.gir : null,
         notes: CloudSync.nullableText(hole.notes)
       };

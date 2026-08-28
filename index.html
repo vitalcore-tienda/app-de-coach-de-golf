@@ -22,10 +22,10 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=9">
-  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/style.css?v=18">
+  <link rel="stylesheet" href="css/components.css?v=18">
 </head>
-<body class="auth-resolving">
+<body class="auth-resolving workspace-locked">
 
   <div class="auth-resolving-screen" id="auth-resolving-screen" role="status" aria-live="polite">
     <div class="brand-badge" aria-hidden="true">⛳</div>
@@ -50,11 +50,15 @@
       <ul class="nav-menu">
         <li class="nav-item active" data-view="dashboard">
           <span class="nav-icon">🏠</span>
-          <span>Dashboard 360°</span>
+          <span>Inicio</span>
         </li>
         <li class="nav-item" data-view="players">
           <span class="nav-icon">👥</span>
-          <span>Golfistas & Datos</span>
+          <span>Golfistas</span>
+        </li>
+        <li class="nav-item" data-view="messages">
+          <span class="nav-icon">💬</span>
+          <span>Mensajes con Golfistas</span>
         </li>
         <li class="nav-item" data-view="assessment">
           <span class="nav-icon">📋</span>
@@ -86,10 +90,10 @@
       <div class="sidebar-footer">
         <span class="player-context-label">Golfista seleccionado</span>
         <div class="player-mini-card" onclick="App.navigateTo('players')" style="cursor: pointer;" title="Cambiar golfista seleccionado">
-          <div class="player-avatar" id="sidebar-player-avatar">A</div>
+          <div class="player-avatar" id="sidebar-player-avatar">—</div>
           <div class="player-mini-info">
-            <h4 id="sidebar-player-name">Alejandro Golfista</h4>
-            <p id="sidebar-player-hcp">HCP: 18.4 (Meta: 12.0)</p>
+            <h4 id="sidebar-player-name">Sin golfista</h4>
+            <p id="sidebar-player-hcp">HCP — · Meta —</p>
           </div>
         </div>
       </div>
@@ -103,25 +107,42 @@
         <div class="topbar-left">
           <button class="menu-toggle-btn" id="mobile-drawer-toggle-btn" aria-label="Abrir menú" onclick="App.toggleMobileDrawer()">☰</button>
           <h1 class="page-title" id="current-page-title">Dashboard 360°</h1>
+          <button class="demo-mode-indicator" id="demo-mode-indicator" type="button" hidden onclick="App.openDemoModeInfo()" title="Ver información del modo demo" aria-label="Modo demo activo. Ver información.">
+            <span aria-hidden="true">🧪</span>
+            <span>Modo demo</span>
+          </button>
         </div>
 
-        <div class="topbar-actions">
-          <button class="btn btn-secondary btn-sm pwa-install-button" id="install-app-btn" hidden onclick="PWAEngine.promptInstall()" title="Instalar GolfCoach">
-            📲 Instalar
+        <button class="mobile-topbar-actions-btn" id="mobile-topbar-actions-btn" type="button" aria-label="Abrir acciones" aria-controls="topbar-actions" aria-expanded="false" onclick="App.toggleMobileTopbarActions()">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="5" r="1.75"></circle>
+            <circle cx="12" cy="12" r="1.75"></circle>
+            <circle cx="12" cy="19" r="1.75"></circle>
+          </svg>
+        </button>
+
+        <div class="topbar-actions" id="topbar-actions">
+          <button class="btn btn-secondary btn-sm pwa-install-button" id="install-app-btn" hidden onclick="App.closeMobileTopbarActions(); PWAEngine.promptInstall()" title="Instalar GolfCoach">
+            <span class="topbar-action-icon" data-icon="download" aria-hidden="true"></span>
+            <span class="topbar-action-label">Instalar</span>
           </button>
-          <button class="btn-icon" id="auth-access-btn" onclick="AuthEngine.openAccessModal()" title="Acceder por email" aria-label="Acceder por email">
-            ✉️
+          <button class="btn-icon" id="auth-access-btn" onclick="App.closeMobileTopbarActions(); AuthEngine.openAccessModal()" title="Acceder por email" aria-label="Acceder por email">
+            <span class="topbar-action-icon" aria-hidden="true">✉️</span>
+            <span class="topbar-action-label">Cuenta</span>
           </button>
-          <button class="btn-icon" id="cloud-sync-btn" hidden onclick="CloudSync.openSyncModal()" title="Respaldo y sincronización cloud" aria-label="Respaldo y sincronización cloud">
-            ☁️
+          <button class="btn-icon" id="cloud-sync-btn" hidden onclick="App.closeMobileTopbarActions(); CloudSync.openSyncModal()" title="Respaldo y sincronización cloud" aria-label="Respaldo y sincronización cloud">
+            <span class="topbar-action-icon" aria-hidden="true">☁️</span>
+            <span class="topbar-action-label">Respaldo cloud</span>
           </button>
-          <button class="btn-icon" id="theme-toggle-btn" onclick="App.toggleTheme()" title="Cambiar tema claro/oscuro">
-            ☀️
+          <button class="btn-icon" id="theme-toggle-btn" onclick="App.toggleTheme(); App.closeMobileTopbarActions()" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema claro/oscuro">
+            <span class="topbar-action-icon" aria-hidden="true">☀️</span>
+            <span class="topbar-action-label">Cambiar tema</span>
           </button>
-          <button class="btn-icon" id="profile-settings-btn" onclick="App.openProfileModal()" title="Editar golfista seleccionado" aria-label="Editar golfista seleccionado">
-            ⚙️
+          <button class="btn-icon" id="profile-settings-btn" onclick="App.closeMobileTopbarActions(); App.openProfileModal()" title="Editar golfista seleccionado" aria-label="Editar golfista seleccionado">
+            <span class="topbar-action-icon" aria-hidden="true">⚙️</span>
+            <span class="topbar-action-label">Editar golfista</span>
           </button>
-          <button class="btn btn-primary btn-sm" id="topbar-new-round-btn" onclick="RoundsEngine.openNewRoundModal()">
+          <button class="btn btn-primary btn-sm" id="topbar-new-round-btn" onclick="App.closeMobileTopbarActions(); RoundsEngine.openNewRoundModal()">
             ➕ Ronda
           </button>
         </div>
@@ -133,7 +154,7 @@
           <span class="workspace-context-icon" aria-hidden="true">👤</span>
           <span class="workspace-context-copy">
             <span class="workspace-context-label" id="workspace-account-label">Entrenador</span>
-            <strong id="workspace-coach-name">Modo local</strong>
+            <strong id="workspace-coach-name">Espacio bloqueado</strong>
           </span>
         </button>
         <span class="workspace-context-divider" aria-hidden="true"></span>
@@ -141,9 +162,9 @@
           <span class="workspace-context-icon" aria-hidden="true">🏌️</span>
           <span class="workspace-context-copy">
             <span class="workspace-context-label">Viendo a</span>
-            <strong id="workspace-player-name">Alejandro Golfista</strong>
+            <strong id="workspace-player-name">Sin golfista</strong>
           </span>
-          <span class="workspace-player-handicap" id="workspace-player-hcp">HCP 18.4</span>
+          <span class="workspace-player-handicap" id="workspace-player-hcp">HCP —</span>
           <span class="workspace-context-change">Cambiar</span>
         </button>
       </section>
@@ -161,6 +182,11 @@
       <!-- 2. Players & Database View Panel -->
       <section class="view-panel" id="players-panel">
         <div id="players-container"></div>
+      </section>
+
+      <!-- Coach-to-player private conversations hub. -->
+      <section class="view-panel" id="messages-panel">
+        <div id="messages-container"></div>
       </section>
 
       <!-- 3. Assessment View Panel -->
@@ -196,31 +222,46 @@
     </main>
 
     <!-- Mobile Bottom Navigation Bar (Thumb Reachable) -->
-    <nav class="bottom-nav-bar" id="mobile-bottom-nav">
-      <div class="bottom-nav-item active" data-view="dashboard" onclick="App.navigateTo('dashboard')">
+    <nav class="bottom-nav-bar coach-bottom-nav" id="mobile-bottom-nav" aria-label="Navegación del entrenador">
+      <button class="bottom-nav-item active" type="button" data-view="dashboard" onclick="App.navigateTo('dashboard')" aria-current="page">
         <span class="bottom-nav-icon">🏠</span>
         <span class="bottom-nav-label">Inicio</span>
-      </div>
-      <div class="bottom-nav-item" data-view="drills" onclick="App.navigateTo('drills')">
+      </button>
+      <button class="bottom-nav-item" type="button" data-view="players" onclick="App.navigateTo('players')">
+        <span class="bottom-nav-icon">👥</span>
+        <span class="bottom-nav-label">Golfistas</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-view="drills" onclick="App.navigateTo('drills')">
         <span class="bottom-nav-icon">🎯</span>
-        <span class="bottom-nav-label">Drills</span>
-      </div>
-      <div class="bottom-nav-item" data-view="mental" onclick="App.navigateTo('mental')">
-        <span class="bottom-nav-icon">🫁</span>
-        <span class="bottom-nav-label">Mente</span>
-      </div>
-      <div class="bottom-nav-item" data-view="tactics" onclick="App.navigateTo('tactics')">
-        <span class="bottom-nav-icon">⛳</span>
-        <span class="bottom-nav-label">Caddy</span>
-      </div>
-      <div class="bottom-nav-item" data-view="rounds" onclick="App.navigateTo('rounds')">
-        <span class="bottom-nav-icon">📊</span>
-        <span class="bottom-nav-label">Score</span>
-      </div>
-      <div class="bottom-nav-item" onclick="App.toggleMobileDrawer()">
+        <span class="bottom-nav-label">Planes</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-view="messages" onclick="App.navigateTo('messages')">
+        <span class="bottom-nav-icon">💬</span>
+        <span class="bottom-nav-label">Mensajes</span>
+      </button>
+      <button class="bottom-nav-item" type="button" onclick="App.toggleMobileDrawer()" aria-label="Abrir más secciones">
         <span class="bottom-nav-icon">☰</span>
         <span class="bottom-nav-label">Más</span>
-      </div>
+      </button>
+    </nav>
+
+    <nav class="bottom-nav-bar player-bottom-nav" id="player-bottom-nav" aria-label="Navegación del golfista" hidden>
+      <button class="bottom-nav-item active" type="button" data-player-section="today" onclick="PlayerPortal.navigateToSection('today')" aria-current="page">
+        <span class="bottom-nav-icon">☀️</span>
+        <span class="bottom-nav-label">Hoy</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-player-section="plan" onclick="PlayerPortal.navigateToSection('plan')">
+        <span class="bottom-nav-icon">🎯</span>
+        <span class="bottom-nav-label">Mi plan</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-player-section="progress" onclick="PlayerPortal.navigateToSection('progress')">
+        <span class="bottom-nav-icon">📈</span>
+        <span class="bottom-nav-label">Progreso</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-player-section="messages" onclick="PlayerPortal.navigateToSection('messages')">
+        <span class="bottom-nav-icon">💬</span>
+        <span class="bottom-nav-label">Mensajes</span>
+      </button>
     </nav>
 
   </div>
@@ -244,7 +285,11 @@
         </li>
         <li class="nav-item" data-view="players" onclick="App.navigateTo('players'); App.closeMobileDrawer();">
           <span class="nav-icon">👥</span>
-          <span>Golfistas & Datos</span>
+          <span>Golfistas</span>
+        </li>
+        <li class="nav-item" data-view="messages" onclick="App.navigateTo('messages'); App.closeMobileDrawer();">
+          <span class="nav-icon">💬</span>
+          <span>Mensajes con Golfistas</span>
         </li>
         <li class="nav-item" data-view="assessment" onclick="App.navigateTo('assessment'); App.closeMobileDrawer();">
           <span class="nav-icon">📋</span>
@@ -277,8 +322,8 @@
         <div class="player-mini-card" onclick="App.navigateTo('players'); App.closeMobileDrawer();" style="cursor: pointer;" title="Cambiar golfista seleccionado">
           <div class="player-avatar" id="drawer-player-avatar">A</div>
           <div class="player-mini-info">
-            <h4 id="drawer-player-name">Alejandro Golfista</h4>
-            <p id="drawer-player-hcp">HCP 18.4 · Cambiar</p>
+            <h4 id="drawer-player-name">Sin golfista</h4>
+            <p id="drawer-player-hcp">HCP — · Cambiar</p>
           </div>
         </div>
       </div>
@@ -296,21 +341,23 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts in dependency order -->
-  <script src="js/database.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/players.js"></script>
-  <script src="js/assessment.js"></script>
-  <script src="js/drills.js"></script>
+  <script src="js/icons.js?v=18"></script>
+  <script src="js/utils.js?v=18"></script>
+  <script src="js/database.js?v=18"></script>
+  <script src="js/storage.js?v=18"></script>
+  <script src="js/players.js?v=18"></script>
+  <script src="js/assessment.js?v=18"></script>
+  <script src="js/drills.js?v=18"></script>
   <script src="js/mental.js"></script>
   <script src="js/tactics.js"></script>
-  <script src="js/rounds.js?v=9"></script>
-  <script src="js/mentor.js"></script>
+  <script src="js/rounds.js?v=18"></script>
+  <script src="js/mentor.js?v=18"></script>
   <script src="js/pwa.js?v=9"></script>
   <script src="vendor/supabase/supabase-js-2.112.3.js"></script>
-  <script src="js/auth.js?v=9"></script>
-  <script src="js/player-portal.js?v=9"></script>
-  <script src="js/cloud-sync.js"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/auth.js?v=18"></script>
+  <script src="js/player-portal.js?v=18"></script>
+  <script src="js/cloud-sync.js?v=18"></script>
+  <script src="js/app.js?v=18"></script>
 
 </body>
 </html>

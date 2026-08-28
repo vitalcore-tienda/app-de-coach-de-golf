@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>GolfCoach · onboarding e integridad</title>
+  <link rel="stylesheet" href="../css/style.css?test=v18">
+  <link rel="stylesheet" href="../css/components.css?test=v18">
+  <style>
+    #result { max-height: 10rem; overflow: auto; padding: 1rem; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; }
+  </style>
+</head>
+<body class="auth-resolving workspace-locked">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-toggle-btn" id="mobile-drawer-toggle-btn" aria-label="Abrir menú">☰</button>
+      <h1 class="page-title" id="current-page-title">Dashboard 360°</h1>
+      <button class="demo-mode-indicator" id="demo-mode-indicator" type="button" hidden onclick="App.openDemoModeInfo()" title="Ver información del modo demo" aria-label="Modo demo activo. Ver información."><span>🧪</span><span>Modo demo</span></button>
+    </div>
+    <button class="mobile-topbar-actions-btn" id="mobile-topbar-actions-btn" type="button" aria-label="Abrir acciones" aria-controls="topbar-actions" aria-expanded="false" onclick="App.toggleMobileTopbarActions()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.75"></circle><circle cx="12" cy="12" r="1.75"></circle><circle cx="12" cy="19" r="1.75"></circle></svg>
+    </button>
+    <div class="topbar-actions" id="topbar-actions">
+      <button class="btn-icon" id="auth-access-btn"><span class="topbar-action-icon">✉️</span><span class="topbar-action-label">Cuenta</span></button>
+      <button class="btn-icon" id="theme-toggle-btn"><span class="topbar-action-icon">☀️</span><span class="topbar-action-label">Cambiar tema</span></button>
+      <button class="btn-icon" id="profile-settings-btn"><span class="topbar-action-icon">⚙️</span><span class="topbar-action-label">Editar golfista</span></button>
+      <button class="btn btn-primary btn-sm" id="topbar-new-round-btn">➕ Ronda</button>
+    </div>
+  </header>
+  <h1>Prueba de onboarding e integridad</h1>
+  <pre id="result">Ejecutando…</pre>
+  <main class="app-container">
+    <section class="view-panel active" id="dashboard-panel"><div id="dashboard-container"></div></section>
+    <section class="view-panel" id="players-panel"><div id="players-container"></div></section>
+    <section class="view-panel" id="rounds-panel"><div id="rounds-container"></div></section>
+  </main>
+  <div id="global-modal"><div id="global-modal-content"></div></div>
+  <div id="toast-container"></div>
+
+  <script src="../js/icons.js?test=v18"></script>
+  <script src="../js/utils.js?test=v18"></script>
+  <script src="../js/database.js?test=v18"></script>
+  <script src="../js/storage.js?test=v18"></script>
+  <script src="../js/players.js?test=v18"></script>
+  <script src="../js/assessment.js?test=v18"></script>
+  <script src="../js/drills.js?test=v18"></script>
+  <script src="../js/rounds.js?test=v18"></script>
+  <script src="../js/cloud-sync.js?test=v18"></script>
+  <script src="../js/app.js?test=v18"></script>
+  <script>
+    window.addEventListener('load', async () => {
+      const result = document.getElementById('result');
+      const token = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const ownerId = `onboarding-owner-${token}`;
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+      const waitUntil = async (predicate, timeout = 5000) => {
+        const started = Date.now();
+        while (!predicate()) {
+          if (Date.now() - started > timeout) throw new Error('La aplicación no terminó de iniciar.');
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+      };
+
+      try {
+        await waitUntil(() => App.ready);
+        await StorageManager.unlockWorkspace(ownerId);
+        App.updateWorkspaceVisibility();
+        App.renderDashboard();
+
+        assert(document.getElementById('mobile-topbar-actions-btn'), 'La barra móvil tiene una sola entrada de acciones');
+        App.toggleMobileTopbarActions();
+        assert(document.getElementById('topbar-actions').classList.contains('mobile-actions-open'), 'El menú compacto puede abrirse');
+        assert(document.getElementById('mobile-topbar-actions-btn').getAttribute('aria-expanded') === 'true', 'El menú móvil informa su estado para accesibilidad');
+        App.closeMobileTopbarActions();
+        assert(!document.getElementById('topbar-actions').classList.contains('mobile-actions-open'), 'El menú compacto puede cerrarse sin perder la vista');
+
+        const emptyHTML = document.getElementById('dashboard-container').textContent;
+        assert(emptyHTML.includes('Espacio listo y vacío'), 'El workspace vacío se presenta como un onboarding');
+        assert(emptyHTML.includes('Agregar primer golfista'), 'El onboarding ofrece agregar el primer golfista real');
+        assert(emptyHTML.includes('Explorar una demostración'), 'La demostración aparece como una opción separada');
+        assert(!emptyHTML.includes('Alejandro Golfista'), 'El onboarding no contiene golfistas ficticios');
+
+        PlayerEngine.openNewPlayerModal();
+        assert(Boolean(document.getElementById('new-player-name')), 'El alta empieza por el nombre del golfista');
+        assert(Boolean(document.getElementById('new-player-handicap')), 'El alta pide el hándicap real');
+        assert(Boolean(document.querySelector('.optional-fields')), 'Los campos secundarios quedan agrupados como opcionales');
+        App.closeModal();
+
+        await App.startDemoMode();
+        const demoProfile = StorageManager.getProfile();
+        assert(StorageManager.isDemoPlayer(demoProfile), 'Explorar la demostración activa una ficha marcada como demo');
+        assert(demoProfile.name === 'Golfista Demo', 'La demostración usa un nombre inequívoco');
+        assert(StorageManager.getRounds().length === 3, 'La demostración incluye rondas simuladas');
+        assert(StorageManager.getAssessment().completed === true, 'La demostración incluye un diagnóstico simulado');
+        assert(StorageManager.getGoals().length > 0, 'La demostración incluye metas simuladas');
+        assert(!document.getElementById('demo-mode-indicator').hidden, 'El distintivo Modo demo permanece visible');
+        assert(document.body.classList.contains('demo-mode-active'), 'La aplicación conserva el estado visual del modo demo');
+        assert(document.getElementById('dashboard-container').textContent.includes('nunca se sincronizan'), 'El dashboard explica que los datos demo no usan la nube');
+        App.openDemoModeInfo();
+        const demoModalText = document.getElementById('global-modal-content').textContent;
+        assert(demoModalText.includes('No se envían a la nube'), 'El distintivo explica que la demostración no se sincroniza');
+        assert(demoModalText.includes('Agregar golfista real'), 'El distintivo permite pasar al alta de una ficha real');
+        App.closeModal();
+        const cloudQueuedDemo = StorageManager.persistenceAvailable
+          ? await CloudSync.queuePlayer(ownerId, demoProfile.id)
+          : false;
+        assert(cloudQueuedDemo === false, 'La cola cloud rechaza cualquier ficha de demostración');
+        await StorageManager.createDemoWorkspace();
+        const demos = (await StorageManager.getPlayers()).filter((candidate) => StorageManager.isDemoPlayer(candidate));
+        assert(demos.length === 1, 'Explorar de nuevo reutiliza la demostración sin duplicarla');
+
+        if (new URLSearchParams(window.location.search).get('preview') === 'demo') {
+          result.dataset.status = 'passed';
+          result.textContent = JSON.stringify({ passed: true, preview: 'demo', checks }, null, 2);
+          return;
+        }
+
+        const player = await StorageManager.createPlayer({ name: `Golfista ${token}`, handicap: 18, targetHandicap: 12 });
+        App.updateWorkspaceVisibility();
+        App.renderDashboard();
+        assert(document.getElementById('demo-mode-indicator').hidden, 'El distintivo desaparece al seleccionar una ficha real');
+        const startedHTML = document.getElementById('dashboard-container').textContent;
+        assert(startedHTML.includes('Primeros pasos · 1/4'), 'La ficha nueva muestra progreso de configuración');
+        assert(startedHTML.includes('no mostramos valores estimados'), 'El diagnóstico vacío no inventa porcentajes');
+        assert(Boolean(document.querySelector('#dashboard-container .dashboard-kpi-grid')), 'Los indicadores del dashboard usan una cuadrícula específica');
+        assert(document.querySelectorAll('#dashboard-container .dashboard-kpi-grid .stat-card').length === 4, 'La cuadrícula compacta conserva los cuatro indicadores');
+
+        RoundsEngine.renderRoundsView();
+        const roundsHTML = document.getElementById('rounds-container').textContent;
+        assert(roundsHTML.includes('Sin rondas cargadas'), 'Las rondas tienen un estado vacío específico');
+        assert(!document.querySelector('#rounds-container .scorecard-table'), 'No se muestra una tabla estadística sin datos');
+
+        let tournamentRejected = false;
+        try {
+          await StorageManager.saveTournament({ name: 'Torneo inválido', startDate: '2026-09-10', endDate: '2026-09-09' });
+        } catch (error) {
+          tournamentRejected = true;
+        }
+        assert(tournamentRejected, 'Las fechas inconsistentes de un torneo se rechazan');
+        assert((await StorageManager.getTournaments(player.id)).length === 0, 'Un torneo inválido no deja registros parciales');
+
+        PlayerEngine.openNewPlayerModal();
+        document.getElementById('new-player-name').value = `Segundo ${token}`;
+        document.getElementById('new-player-handicap').value = '22';
+        const originalCreatePlayer = StorageManager.createPlayer.bind(StorageManager);
+        let createCalls = 0;
+        StorageManager.createPlayer = async (data) => {
+          createCalls += 1;
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          return originalCreatePlayer(data);
+        };
+        const firstCreate = PlayerEngine.saveNewPlayer();
+        const secondCreate = PlayerEngine.saveNewPlayer();
+        await Promise.all([firstCreate, secondCreate]);
+        StorageManager.createPlayer = originalCreatePlayer;
+        assert(createCalls === 1, 'Un doble envío crea una sola ficha');
+
+        App.openProfileModal();
+        const originalSaveProfile = StorageManager.saveProfile.bind(StorageManager);
+        let profileSaveCalls = 0;
+        StorageManager.saveProfile = async (data) => {
+          profileSaveCalls += 1;
+          await new Promise((resolve) => setTimeout(resolve, 60));
+          return originalSaveProfile(data);
+        };
+        const firstProfileSave = App.saveProfile();
+        const secondProfileSave = App.saveProfile();
+        await Promise.all([firstProfileSave, secondProfileSave]);
+        StorageManager.saveProfile = originalSaveProfile;
+        assert(profileSaveCalls === 1, 'Un doble envío actualiza el perfil una sola vez');
+
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'passed';
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+      } catch (error) {
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'failed';
+        result.textContent = JSON.stringify({ passed: false, checks, error: error.message }, null, 2);
+      }
+    });
+  </script>
+</body>
+</html>

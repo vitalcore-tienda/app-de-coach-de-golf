@@ -36,7 +36,8 @@ coach-de-golf/
 │   └── supabase/migrations/     # Esquema cloud con roles, RLS y autenticación preparada
 └── js/
     ├── database.js              # Base local IndexedDB y tablas de datos estructurados
-    ├── storage.js               # Repositorio y caché de datos por golfista
+    ├── storage.js               # Repositorio aislado por entrenador y por golfista
+    ├── utils.js                 # Fechas locales y utilidades compartidas
     ├── players.js               # Fichas de golfistas, hándicap y torneos
     ├── assessment.js            # Cuestionario diagnóstico 360° y cálculo del radar de habilidades
     ├── drills.js                # Catálogo de drills y temporizador Pomodoro de golf con audio
@@ -46,6 +47,7 @@ coach-de-golf/
     ├── mentor.js                # Chat interactivo con el Coach, metas SMART y diario del jugador
     ├── pwa.js                   # Instalación, atajos y aviso de conectividad
     ├── auth.js                  # Magic Link, sesión y activación del primer entrenador
+    ├── icons.js                 # Familia SVG consistente para controles y navegación
     ├── player-portal.js         # Vista privada del golfista y mensajería con su entrenador
     └── app.js                   # Controlador principal, cambio de temas y gestión de modales
 ```
@@ -54,16 +56,21 @@ coach-de-golf/
 
 ## 🚀 Cómo Usar la Aplicación
 
-1. **Abrir la app**: Haz doble clic en `Abrir Coach de Golf.bat` o abre `index.html` en tu navegador favorito.
-2. **Realizar el Diagnóstico 360°**: Ve a la pestaña **Diagnóstico 360°** y completa el test de 15 preguntas para ver tu balance en el radar y recibir el plan sugerido por el Coach.
-3. **Entrenar con el Temporizador Pomodoro**: Dirígete a **Entrenamiento & Drills** y activa sesiones estructuradas de 20 minutos con descansos programados.
-4. **Controlar la Ansiedad**: Usa el módulo **Juego Mental** para practicar la respiración cuadrada guiada antes de salir al campo.
-5. **Calcular tu Palo con el Caddy**: En **Caddy & Estrategia**, ingresa la distancia láser y el viento para obtener la distancia efectiva y palo recomendado.
-6. **Registrar tus Rondas**: Tras jugar, ingresa a **Scorecard & Rondas** para cargar tus golpes, putts y calles acertadas.
-7. **Consultar al Mentor**: En **Mentoría & Metas**, haz preguntas al Coach Virtual para resolver dudas sobre tu swing y fijar tus metas de temporada.
-8. **Gestionar golfistas**: En **Golfistas & Datos**, crea una ficha por jugador, registra la evolución del hándicap y carga sus torneos. Cada ronda queda vinculada al golfista activo.
+1. **Abrir la app e ingresar**: accedé con el correo del entrenador. Sin una cuenta verificada, las fichas locales permanecen bloqueadas.
+2. **Elegir cómo empezar**: una instalación nueva comienza vacía. El entrenador puede agregar su primer golfista real o abrir una demostración separada, identificada permanentemente como **Modo demo** y excluida de la sincronización.
+3. **Realizar el Diagnóstico 360°**: Ve a la pestaña **Diagnóstico 360°** y completa el test de 15 preguntas para ver tu balance en el radar y recibir el plan sugerido por el Coach.
+4. **Entrenar con el Temporizador Pomodoro**: Dirígete a **Entrenamiento & Drills** y activa sesiones estructuradas de 20 minutos con descansos programados.
+5. **Controlar la Ansiedad**: Usa el módulo **Juego Mental** para practicar la respiración cuadrada guiada antes de salir al campo.
+6. **Calcular tu Palo con el Caddy**: En **Caddy & Estrategia**, ingresa la distancia láser y el viento para obtener la distancia efectiva y palo recomendado.
+7. **Registrar tus Rondas**: Tras jugar, ingresa a **Scorecard & Rondas** para cargar tus golpes, putts y calles acertadas.
+8. **Consultar al Mentor**: En **Mentoría & Metas**, haz preguntas al Coach Virtual para resolver dudas sobre tu swing y fijar tus metas de temporada.
+9. **Gestionar golfistas**: En **Golfistas**, crea una ficha por jugador, registra la evolución del hándicap y carga sus torneos. Cada ronda queda vinculada al golfista activo.
 
 En el panel del entrenador, la barra de contexto diferencia siempre la **cuenta conectada** del **golfista seleccionado**. Antes de registrar una ronda, la app también indica de forma explícita en qué ficha se guardará.
+
+En celular, la navegación cambia según el rol. El entrenador dispone de **Inicio · Golfistas · Planes · Mensajes · Más**, con Golfistas y las conversaciones siempre al alcance del pulgar. La cuenta de golfista ve solamente **Hoy · Mi plan · Progreso · Mensajes** y cada acceso la lleva a la sección correspondiente de su portal privado.
+
+Los controles, estados y módulos usan una única familia de iconos SVG. El dorado queda reservado para la sección seleccionada y las acciones principales; los emojis que una persona escriba dentro de mensajes o notas se conservan como contenido personal.
 
 Si hay una sesión por correo pero Supabase todavía no puede confirmar su rol, GolfCoach mantiene ocultas las fichas locales y ofrece reintentar la verificación. La aplicación nunca interpreta una cuenta pendiente como entrenador por descarte.
 
@@ -76,7 +83,7 @@ La versión publicada en GitHub Pages es una aplicación web instalable. Abrila 
 - En Android (Chrome o Edge), tocá **Instalar** dentro de la app o usá el menú de tres puntos → **Instalar aplicación** / **Agregar a pantalla principal**.
 - En iPhone/iPad, abrila en Safari → **Compartir** → **Agregar a pantalla de inicio**.
 
-El ícono queda en el teléfono y la interfaz, las fichas ya abiertas y los recursos de la app quedan disponibles sin conexión. El archivo `.bat` sirve para abrir una copia local en Windows, pero `file://` no permite instalarla ni activar el service worker; para esas funciones usá la URL HTTPS.
+El ícono queda en el teléfono y los recursos de la app quedan disponibles sin conexión. Las fichas pueden abrirse offline mientras el dispositivo conserve una sesión de entrenador válida y su rol haya sido verificado durante los últimos 30 días. El archivo `.bat` sirve para abrir una copia local en Windows, pero `file://` no permite instalarla ni activar el service worker; para esas funciones usá la URL HTTPS.
 
 ---
 
@@ -89,7 +96,9 @@ La aplicación usa **IndexedDB** como base de datos local del navegador. Guarda:
 - Torneos por jugador y rondas opcionalmente vinculadas a un torneo.
 - Rondas y sus 9/18 hoyos: golpes, par, putts, FIR, GIR, bunker y penalidades.
 
-La primera vez que se abre la versión nueva, los datos anteriores de LocalStorage se migran automáticamente. Como respaldo, el entrenador puede activar la sincronización cloud desde el ícono ☁️: la app sigue guardando primero en IndexedDB y conserva una cola para reintentar cuando vuelva la conexión.
+Cada registro local pertenece al identificador de la cuenta de entrenador. Al cerrar sesión, el workspace se bloquea y la ficha activa se elimina de memoria. Los datos antiguos sin propietario no se borran ni se entregan automáticamente a otra cuenta: aparecen como fichas anteriores y deben vincularse de forma explícita. Las demostraciones nuevas o anteriores se muestran con el distintivo **Modo demo**, usan nombres inequívocos y nunca se sincronizan.
+
+Como respaldo, el entrenador puede activar la sincronización cloud desde la acción **Sincronización cloud**: la app sigue guardando primero en IndexedDB y conserva una cola para reintentar cuando vuelva la conexión.
 
 ## 🔐 Cuentas compartidas y base cloud
 
@@ -99,7 +108,7 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 - El golfista entra con un enlace de un solo uso enviado a su correo; al confirmar el mismo mail que figura en su ficha, queda vinculado a ella sin duplicar datos.
 - Las reglas RLS impiden que un golfista consulte a otros jugadores, y que un entrenador acceda a jugadores que no tiene asignados.
 - El rol de primer entrenador se protege con un código de configuración de una sola vez; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
-- El acceso se abre desde el ícono ✉️ de la barra superior. No utiliza contraseña: Supabase envía un Magic Link y la app conserva la sesión del dispositivo mediante su cliente oficial versionado localmente.
+- El acceso se abre desde la acción de cuenta de la barra superior. No utiliza contraseña: Supabase envía un Magic Link y la app conserva la sesión del dispositivo mediante su cliente oficial versionado localmente.
 
 ### Experiencia según el rol
 
@@ -110,6 +119,6 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 
 Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabase/migrations`](database/supabase/migrations): estructura, endurecimiento del primer entrenador, seguridad adicional e índices. El proyecto de Supabase debe ser exclusivo de GolfCoach; no se deben aplicar estas migraciones a otras apps de VitalCore. En Supabase Auth, Site URL y Redirect URL deben ser exactamente `https://vitalcore-tienda.github.io/app-de-coach-de-golf/`.
 
-Después de publicar esta versión, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. Al activarse, toca ☁️ y elige **Activar respaldo y sincronizar** para realizar la primera carga explícita de las fichas que ya están en ese dispositivo. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
+Después de publicar esta versión, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. Si el dispositivo contiene fichas anteriores, primero debe elegir **Revisar fichas anteriores** y confirmar su vinculación. Luego toca ☁️ y elige **Activar respaldo y sincronizar**. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
 
 No subas nombres, teléfonos, correos, códigos de activación ni claves administrativas al repositorio: GitHub Pages es público. La app usa solamente una publishable key en el navegador; las políticas RLS de PostgreSQL autorizan cada dato en el servidor.
