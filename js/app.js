@@ -416,23 +416,23 @@ class App {
         </div>
       ` : ''}
       <!-- Coach workspace hero -->
-      <div class="card card-gold-glow" style="margin-bottom: 1.5rem; background: radial-gradient(circle at 10% 20%, rgba(24, 92, 59, 0.4) 0%, rgba(18, 25, 21, 0.95) 80%);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+      <div class="card card-gold-glow view-hero" style="background: radial-gradient(circle at 10% 20%, rgba(24, 92, 59, 0.4) 0%, rgba(18, 25, 21, 0.95) 80%);">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
+            <div class="view-kicker-row">
               <span class="badge badge-gold">Panel del entrenador</span>
               <span class="badge badge-green">Ficha seleccionada</span>
             </div>
             <h2>Resumen de ${profileName}</h2>
-            <p style="font-size: 0.88rem; max-width: 600px;">
+            <p>
               Estás trabajando sobre la ficha deportiva de <strong style="color: var(--text-main);">${profileName}</strong>. Todo lo que cargues quedará asociado a este golfista.
             </p>
           </div>
-          <div style="display: flex; gap: 0.5rem; width: 100%; flex-wrap: wrap;">
-            <button class="btn btn-primary btn-sm" style="flex: 1; min-height: 42px;" onclick="AssessmentEngine.startQuiz()">
+          <div class="view-actions dashboard-hero-actions">
+            <button class="btn btn-primary btn-sm" onclick="AssessmentEngine.startQuiz()">
               📋 Diagnóstico 360°
             </button>
-            <button class="btn btn-secondary btn-sm" style="flex: 1; min-height: 42px;" onclick="RoundsEngine.openNewRoundModal()">
+            <button class="btn btn-secondary btn-sm" onclick="RoundsEngine.openNewRoundModal()">
               ➕ Registrar Ronda
             </button>
           </div>
@@ -469,7 +469,7 @@ class App {
       </div>
 
       <!-- Main Dashboard Grid -->
-      <div class="grid-2" style="margin-bottom: 1.5rem;">
+      <div class="grid-2 layout-section">
         <!-- Radar Chart Widget -->
         <div class="card">
           <div class="card-header">
@@ -514,15 +514,15 @@ class App {
         </div>
 
         <!-- Recommended Daily Drill & Quick Actions -->
-        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <div class="content-stack">
           <!-- Drill of the Day -->
           <div class="card" style="border-left: 4px solid var(--gold-400);">
             <div class="card-header">
               <span class="badge badge-gold">Drill Recomendado</span>
               <span class="badge badge-blue">⏱️ 20 min</span>
             </div>
-            <h3 style="margin-bottom: 0.4rem; font-size: 1.05rem;">Drill del Reloj / Estrella a 1 Metro</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+            <h3 class="content-title">Drill del Reloj / Estrella a 1 Metro</h3>
+            <p class="content-copy">
               Enfocado en eliminar tripateos y construir confianza inquebrantable bajo presión.
             </p>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -834,10 +834,7 @@ class App {
     profile.playerCategory = read('profile-category-input');
 
     try {
-      if (button) {
-        button.disabled = true;
-        button.textContent = 'Guardando…';
-      }
+      GolfForm.setBusy(button, true, 'Guardando perfil…');
       if (status) {
         status.textContent = '';
         status.classList.remove('error');
@@ -845,7 +842,7 @@ class App {
       await StorageManager.saveProfile(profile);
       App.updateProfileDisplay();
       App.closeModal();
-      App.showToast('✅ Perfil actualizado.');
+      App.showSaveConfirmation('Perfil actualizado', 'Los cambios quedaron asociados a esta ficha.');
       App.renderDashboard();
       if (App.currentView === 'players' && window.PlayerEngine) await PlayerEngine.renderPlayersView();
     } catch (error) {
@@ -855,10 +852,7 @@ class App {
         status.textContent = message;
         status.classList.add('error');
       }
-      if (button) {
-        button.disabled = false;
-        button.textContent = 'Guardar cambios';
-      }
+      GolfForm.setBusy(button, false);
       App.showToast(message);
     }
   }
@@ -883,22 +877,54 @@ class App {
 
   static openModal() {
     const modal = document.getElementById('global-modal');
+    const modalContent = document.getElementById('global-modal-content');
+    if (modalContent && window.GolfForm) GolfForm.enhance(modalContent);
     if (modal) modal.classList.add('active');
   }
 
   static closeModal() {
     const modal = document.getElementById('global-modal');
     if (modal) modal.classList.remove('active');
+    document.getElementById('global-modal-content')?.classList.remove('form-modal');
     const cleanup = App.modalCleanup;
     App.modalCleanup = null;
     if (typeof cleanup === 'function') cleanup();
+  }
+
+  static requestModalClose() {
+    if (document.getElementById('round-entry-form') && window.RoundsEngine?.roundPlayerContext) {
+      RoundsEngine.cancelRoundEntry();
+      return;
+    }
+    App.closeModal();
   }
 
   static setModalCleanup(cleanup) {
     App.modalCleanup = typeof cleanup === 'function' ? cleanup : null;
   }
 
-  static showToast(message) {
+  static toastType(message, requestedType = '') {
+    if (['success', 'error', 'warning', 'info'].includes(requestedType)) return requestedType;
+    const normalized = String(message || '').toLowerCase();
+    if (normalized.includes('no se pudo') || normalized.includes('error') || normalized.includes('falló')) return 'error';
+    if (normalized.includes('revisá') || normalized.includes('primero') || normalized.includes('necesitás') || normalized.includes('sin conexión')) return 'warning';
+    if (normalized.includes('guardad') || normalized.includes('completad') || normalized.includes('actualizad') || normalized.includes('registrad') || normalized.includes('cread')) return 'success';
+    return 'info';
+  }
+
+  static showSaveConfirmation(title, detail = '') {
+    const offline = navigator.onLine === false;
+    App.showToast({
+      title,
+      message: detail || (offline
+        ? 'Guardado en este dispositivo. Podés seguir trabajando sin conexión.'
+        : 'Tus cambios quedaron guardados correctamente.'),
+      type: 'success',
+      duration: 4200
+    });
+  }
+
+  static showToast(message, type = '', options = {}) {
     let container = document.getElementById('toast-container');
     if (!container) {
       container = document.createElement('div');
@@ -907,12 +933,32 @@ class App {
       document.body.appendChild(container);
     }
 
+    const config = message && typeof message === 'object'
+      ? message
+      : { title: '', message: String(message ?? ''), type, ...options };
+    const resolvedType = App.toastType(config.message || config.title, config.type || type);
+    const titles = {
+      success: 'Listo',
+      error: 'No se pudo completar',
+      warning: 'Revisá esto',
+      info: 'GolfCoach'
+    };
+    const symbols = { success: '✓', error: '×', warning: '!', info: 'i' };
     const toast = document.createElement('div');
-    toast.className = 'toast';
+    toast.className = `toast toast-${resolvedType}`;
+    toast.setAttribute('role', resolvedType === 'error' ? 'alert' : 'status');
+    toast.setAttribute('aria-live', resolvedType === 'error' ? 'assertive' : 'polite');
     const icon = document.createElement('span');
-    icon.textContent = '⛳';
+    icon.className = 'toast-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = symbols[resolvedType];
     const content = document.createElement('div');
-    content.textContent = String(message ?? '');
+    content.className = 'toast-copy';
+    const heading = document.createElement('strong');
+    heading.textContent = String(config.title || titles[resolvedType]);
+    const body = document.createElement('span');
+    body.textContent = String(config.message || '');
+    content.replaceChildren(heading, body);
     toast.replaceChildren(icon, content);
     container.appendChild(toast);
 
@@ -921,7 +967,7 @@ class App {
       toast.style.transform = 'translateY(15px)';
       toast.style.transition = 'all 0.25s ease';
       setTimeout(() => toast.remove(), 250);
-    }, 2800);
+    }, Number(config.duration) > 0 ? Number(config.duration) : 3400);
   }
 }
 

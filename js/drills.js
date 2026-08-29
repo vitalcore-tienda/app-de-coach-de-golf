@@ -163,13 +163,13 @@ class DrillsEngine {
     const progress = StorageManager.getDrillsProgress();
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Planes de Entrenamiento & Drills</h2>
             <p>Ejercicios específicos con propósito estructurado para corregir fallos y afianzar consistencia.</p>
           </div>
-          <div style="display: flex; gap: 0.75rem;">
+          <div class="view-actions">
             <button class="btn btn-primary" onclick="DrillsEngine.openTimerModal()">
               ⏱️ Abrir Temporizador Pomodoro de Golf
             </button>
@@ -215,11 +215,11 @@ class DrillsEngine {
       return `
         <div class="card drill-card ${isCompleted ? 'completed-drill' : ''}" style="${isCompleted ? 'border-left-color: var(--color-success);' : ''}">
           <div>
-            <div class="card-header" style="margin-bottom: 0.5rem;">
+            <div class="card-header">
               <span class="badge badge-gold">${drill.categoryName}</span>
               <span class="badge badge-blue">⏱️ ${drill.duration} min</span>
             </div>
-            <h3 style="font-size: 1.1rem; margin-bottom: 0.4rem; color: var(--text-main);">${drill.title}</h3>
+            <h3 class="content-title">${drill.title}</h3>
             
             <div class="drill-purpose">
               <strong>Propósito:</strong> ${drill.purpose}
@@ -259,7 +259,10 @@ class DrillsEngine {
     progress[drillId].lastDate = new Date().toISOString();
     try {
       await StorageManager.saveDrillsProgress(progress);
-      App.showToast(progress[drillId].completed ? '🎉 ¡Drill completado y registrado!' : 'Drill marcado como pendiente.');
+      App.showSaveConfirmation(
+        progress[drillId].completed ? 'Drill completado' : 'Estado del drill actualizado',
+        progress[drillId].completed ? 'El progreso quedó registrado en la ficha.' : 'El ejercicio volvió a quedar pendiente.'
+      );
       DrillsEngine.renderDrillsView();
       if (window.App && App.renderDashboard) App.renderDashboard();
     } catch (error) {

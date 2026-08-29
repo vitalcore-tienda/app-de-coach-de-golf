@@ -72,6 +72,14 @@ En celular, la navegación cambia según el rol. El entrenador dispone de **Inic
 
 Los controles, estados y módulos usan una única familia de iconos SVG. El dorado queda reservado para la sección seleccionada y las acciones principales; los emojis que una persona escriba dentro de mensajes o notas se conservan como contenido personal.
 
+Las ventanas para agregar golfistas, rondas, torneos, metas y entrenamientos comparten la misma estructura: título y contexto claros, campos agrupados, ayuda breve, validación junto al dato incorrecto y acciones consistentes para cancelar o guardar.
+
+En celular, el scorecard muestra los 18 hoyos en una cuadrícula táctil, mantiene golpes y putts lado a lado, ofrece scores rápidos respecto del par y avanza con **Guardar y seguir**. La barra de progreso resume golpes y putts, y una carga iniciada requiere confirmación antes de descartarse.
+
+La interfaz usa una escala compartida de tipografía y espaciado para mantener la misma jerarquía en títulos, tarjetas, etiquetas, formularios y vistas de entrenador o golfista. Los márgenes y rellenos se adaptan de forma compacta en celular sin reducir la legibilidad.
+
+Mientras se abren fichas, el portal o las conversaciones, la interfaz muestra esqueletos que reservan el espacio sin inventar datos. Cada guardado confirma qué se actualizó; si falla internet o Supabase, GolfCoach diferencia el modo offline de un respaldo pendiente, conserva visible la cola cloud y permite reintentar sin confundirla con una operación completada.
+
 Si hay una sesión por correo pero Supabase todavía no puede confirmar su rol, GolfCoach mantiene ocultas las fichas locales y ofrece reintentar la verificación. La aplicación nunca interpreta una cuenta pendiente como entrenador por descarte.
 
 ## 📲 Instalarla en el celular

@@ -9,11 +9,16 @@ class RoundsEngine {
   static scorecardMode = 'mobile'; // 'mobile' (stepper) or 'table'
   static holeData = [];
   static roundPlayerContext = null;
+  static discardArmedUntil = 0;
+  static discardResetTimer = null;
 
   static initHoleData(count = 18) {
     RoundsEngine.currentHoleCount = count;
     RoundsEngine.holeData = [];
     RoundsEngine.activeMobileHole = 0;
+    RoundsEngine.discardArmedUntil = 0;
+    if (RoundsEngine.discardResetTimer) window.clearTimeout(RoundsEngine.discardResetTimer);
+    RoundsEngine.discardResetTimer = null;
     
     // Default par distribution
     const defaultPars18 = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
@@ -47,10 +52,12 @@ class RoundsEngine {
 
     if (!rounds.length) {
       container.innerHTML = `
-        <div class="card card-gold-glow" style="margin-bottom:1.5rem;">
-          <span class="badge badge-gold">Golfista seleccionado</span>
-          <h2 style="margin-top:0.45rem;">Rondas de ${playerName}</h2>
-          <p>Las estadísticas aparecerán cuando registres una ronda real.</p>
+        <div class="card card-gold-glow view-hero">
+          <div class="view-heading-copy">
+            <div class="view-kicker-row"><span class="badge badge-gold">Golfista seleccionado</span></div>
+            <h2>Rondas de ${playerName}</h2>
+            <p>Las estadísticas aparecerán cuando registres una ronda real.</p>
+          </div>
         </div>
         <div class="card empty-state-panel">
           <div class="card-icon">⛳</div>
@@ -64,15 +71,15 @@ class RoundsEngine {
     }
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 1.5rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-          <div>
-            <span class="badge badge-gold" style="margin-bottom: 0.35rem;">Golfista seleccionado</span>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
+            <div class="view-kicker-row"><span class="badge badge-gold">Golfista seleccionado</span></div>
             <h2>Rondas de ${playerName}</h2>
             <p>Estadísticas y scorecards asociados a la ficha que estás viendo.</p>
           </div>
-          <div style="display: flex; gap: 0.5rem; width: 100%; justify-content: flex-end;">
-            <button class="btn btn-primary" style="flex: 1; max-width: 240px;" onclick="RoundsEngine.openNewRoundModal()">
+          <div class="view-actions">
+            <button class="btn btn-primary" onclick="RoundsEngine.openNewRoundModal()">
               ➕ Registrar Nueva Ronda
             </button>
           </div>
@@ -80,12 +87,12 @@ class RoundsEngine {
       </div>
 
       <!-- KPI Summary Cards -->
-      <div class="grid-4" style="margin-bottom: 1.5rem;">
+      <div class="grid-4 layout-section">
         ${RoundsEngine.generateKPIsHTML(rounds)}
       </div>
 
       <!-- Score Trend Evolution Chart -->
-      <div class="card" style="margin-bottom: 1.5rem;">
+      <div class="card layout-section">
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon">📈</div>
@@ -301,122 +308,166 @@ class RoundsEngine {
     modalContent.innerHTML = `
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
-        <div>
-          <span class="badge badge-gold" style="margin-bottom: 0.25rem;">Golfista seleccionado</span>
-          <h3>Registrar ronda de ${playerName}</h3>
+        <div class="modal-heading">
+          <span class="modal-eyebrow">Scorecard</span>
+          <h3 class="modal-title">Registrar ronda</h3>
+          <p class="modal-description">Completá los datos generales y luego avanzá hoyo por hoyo.</p>
         </div>
-        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+        <button class="modal-close" type="button" onclick="App.requestModalClose()" aria-label="Cerrar ventana">&times;</button>
       </div>
-
-      <div class="offline-info-card" role="status" style="margin-bottom: 1rem;">
-        <span aria-hidden="true">🏌️</span>
-        <span>Esta ronda se guardará en la ficha de <strong>${playerName}</strong>.</span>
-      </div>
-
-      <div class="grid-3" style="margin-bottom: 1rem;">
-        <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Campo de Golf</label>
-          <input type="text" class="form-control" id="round-course-input" placeholder="Nombre del campo">
+      <div class="app-form round-entry-form" id="round-entry-form">
+        <div class="form-context" role="status">
+          <span aria-hidden="true">🏌️</span>
+          <span>Se guardará en la ficha de <strong>${playerName}</strong>.</span>
         </div>
-        <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Fecha</label>
-          <input type="date" class="form-control" id="round-date-input" value="${GolfUtils.localDateISO()}">
-        </div>
-        <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Modalidad</label>
-          <select class="form-control" id="round-holes-select" onchange="RoundsEngine.changeHolesCount(this.value)">
-            <option value="18" selected>18 Hoyos</option>
-            <option value="9">9 Hoyos</option>
-          </select>
-        </div>
-      </div>
+        <details class="form-section round-setup-section" id="round-setup-section" open>
+          <summary class="round-setup-summary">
+            <span><strong>Datos de la ronda</strong><small id="round-setup-summary-text">Campo, fecha y modalidad</small></span>
+            <span class="round-setup-edit">Editar</span>
+          </summary>
+          <div class="round-setup-content">
+            <div class="form-grid-3">
+            <div class="form-group">
+              <label class="form-label" for="round-course-input">Campo de golf <span class="form-required" aria-hidden="true">*</span></label>
+              <input type="text" class="form-control" id="round-course-input" placeholder="Nombre del campo" maxlength="160" data-required-message="Ingresá el nombre del campo." required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="round-date-input">Fecha <span class="form-required" aria-hidden="true">*</span></label>
+              <input type="date" class="form-control" id="round-date-input" value="${GolfUtils.localDateISO()}" required>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="round-holes-select">Modalidad</label>
+              <select class="form-control" id="round-holes-select" onchange="RoundsEngine.changeHolesCount(this.value)">
+                <option value="18" selected>18 hoyos</option>
+                <option value="9">9 hoyos</option>
+              </select>
+            </div>
+            </div>
+            <details class="round-setup-optional">
+              <summary>Tipo de ronda y torneo <span>Opcional</span></summary>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label class="form-label" for="round-kind-select">Tipo de ronda</label>
+                  <select class="form-control" id="round-kind-select">
+                    <option value="Práctica">Práctica</option>
+                    <option value="Amistosa">Amistosa</option>
+                    <option value="Torneo">Torneo</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label" for="round-tournament-select">Torneo vinculado</label>
+                  <select class="form-control" id="round-tournament-select">
+                    <option value="">Sin vincular</option>
+                    ${tournaments.map((tournament) => `<option value="${RoundsEngine.escapeHTML(tournament.id)}">${RoundsEngine.escapeHTML(tournament.name)} · ${RoundsEngine.escapeHTML(tournament.startDate)}</option>`).join('')}
+                  </select>
+                </div>
+              </div>
+            </details>
+            <button class="btn btn-primary round-mobile-start-btn" type="button" onclick="RoundsEngine.startScorecard()">Empezar por el hoyo 1</button>
+          </div>
+        </details>
 
-      <div class="grid-2" style="margin-bottom: 1rem;">
-        <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Tipo de ronda</label>
-          <select class="form-control" id="round-kind-select">
-            <option value="Práctica">Práctica</option>
-            <option value="Amistosa">Amistosa</option>
-            <option value="Torneo">Torneo</option>
-          </select>
-        </div>
-        <div class="form-group" style="margin-bottom: 0.5rem;">
-          <label class="form-label">Torneo vinculado</label>
-          <select class="form-control" id="round-tournament-select">
-            <option value="">Sin vincular</option>
-            ${tournaments.map((tournament) => `<option value="${RoundsEngine.escapeHTML(tournament.id)}">${RoundsEngine.escapeHTML(tournament.name)} · ${RoundsEngine.escapeHTML(tournament.startDate)}</option>`).join('')}
-          </select>
-        </div>
-      </div>
+        <section class="form-section round-score-section" id="round-score-section">
+          <div class="form-section-title">Score hoyo por hoyo</div>
+          <div class="round-progress-card" aria-live="polite">
+            <div class="round-progress-heading">
+              <span id="round-progress-label">0 de 18 hoyos</span>
+              <strong id="round-progress-score">Sin score</strong>
+            </div>
+            <div class="round-progress-track" aria-hidden="true"><span id="round-progress-fill"></span></div>
+            <div class="round-progress-meta">
+              <span id="round-progress-putts">0 putts</span>
+              <span id="round-progress-status">Empezá por el hoyo 1</span>
+            </div>
+          </div>
+          <div>
+            <div class="hole-pagination-heading">
+              <span>Seleccionar hoyo</span>
+              <small><i class="hole-status-dot"></i> Completado</small>
+            </div>
+            <div class="hole-pagination-bar" id="hole-chips-container">
+              ${RoundsEngine.renderHolePaginationChips()}
+            </div>
+          </div>
 
-      <!-- Hole Selection Pagination Chips -->
-      <div style="margin-bottom: 0.75rem;">
-        <label class="form-label">Seleccionar Hoyo:</label>
-        <div class="hole-pagination-bar" id="hole-chips-container">
-          ${RoundsEngine.renderHolePaginationChips()}
+          <div id="active-hole-container">
+            ${RoundsEngine.renderActiveHoleStepperCard()}
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-title">Cierre de la ronda</div>
+          <div class="form-group">
+            <label class="form-label" for="round-notes-input">Sensaciones y notas</label>
+            <textarea class="form-control" id="round-notes-input" rows="3" maxlength="1200" placeholder="Qué funcionó, qué ajustar y sensaciones del juego…"></textarea>
+          </div>
+          <div id="live-round-total" class="round-final-summary">0 de 18 hoyos completos</div>
+        </section>
+
+        <div class="form-status" id="round-save-status" role="status" aria-live="polite"></div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" type="button" id="round-cancel-btn" onclick="RoundsEngine.cancelRoundEntry()">Cancelar</button>
+          <button class="btn btn-primary" type="button" id="round-save-btn" onclick="RoundsEngine.saveNewRound()">Guardar ronda</button>
         </div>
-      </div>
-
-      <!-- Active Hole Mobile Stepper Card -->
-      <div id="active-hole-container">
-        ${RoundsEngine.renderActiveHoleStepperCard()}
-      </div>
-
-      <!-- Notes Field -->
-      <div class="form-group" style="margin-top: 1rem;">
-        <label class="form-label">Sensaciones & Notas</label>
-        <input type="text" class="form-control" id="round-notes-input" placeholder="Sensaciones del juego...">
-      </div>
-
-      <!-- Live Total Bar -->
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
-        <div id="live-round-total" style="font-weight: 700; color: var(--gold-400); font-size: 1.05rem;">
-          0 de 18 hoyos completos
-        </div>
-        <button class="btn btn-primary" id="round-save-btn" style="min-height: 48px; width: 100%;" onclick="RoundsEngine.saveNewRound()">
-          💾 Guardar Ronda
-        </button>
       </div>
     `;
 
     RoundsEngine.updateLiveTotals();
     App.setModalCleanup(() => {
       RoundsEngine.roundPlayerContext = null;
+      RoundsEngine.discardArmedUntil = 0;
+      if (RoundsEngine.discardResetTimer) window.clearTimeout(RoundsEngine.discardResetTimer);
+      RoundsEngine.discardResetTimer = null;
     });
     App.openModal();
+    window.setTimeout(() => document.getElementById('round-course-input')?.focus(), 0);
   }
 
   static renderHolePaginationChips() {
     return RoundsEngine.holeData.map((h, idx) => `
-      <button class="hole-chip-btn ${idx === RoundsEngine.activeMobileHole ? 'active' : ''} ${h.completed ? 'completed' : ''}" onclick="RoundsEngine.selectHole(${idx})">
-        ${h.hole}${h.completed ? ' ✓' : ''}
+      <button type="button" class="hole-chip-btn ${idx === RoundsEngine.activeMobileHole ? 'active' : ''} ${h.completed ? 'completed' : ''}" onclick="RoundsEngine.selectHole(${idx})" aria-label="Hoyo ${h.hole}, ${h.completed ? 'completado' : 'pendiente'}" ${idx === RoundsEngine.activeMobileHole ? 'aria-current="step"' : ''}>
+        <span>${h.hole}</span>
       </button>
     `).join('');
   }
 
   static selectHole(idx) {
-    RoundsEngine.activeMobileHole = idx;
+    const safeIndex = Math.max(0, Math.min(RoundsEngine.holeData.length - 1, Number(idx) || 0));
+    RoundsEngine.activeMobileHole = safeIndex;
     const chipsContainer = document.getElementById('hole-chips-container');
     if (chipsContainer) chipsContainer.innerHTML = RoundsEngine.renderHolePaginationChips();
-    
+
     const holeContainer = document.getElementById('active-hole-container');
     if (holeContainer) holeContainer.innerHTML = RoundsEngine.renderActiveHoleStepperCard();
+    RoundsEngine.updateLiveTotals();
+  }
+
+  static holeScoreLabel(hole) {
+    if (!Number.isInteger(hole?.strokes)) return 'Sin score';
+    const relative = hole.strokes - hole.par;
+    if (relative === 0) return 'Par';
+    if (relative === -1) return 'Birdie';
+    if (relative <= -2) return 'Eagle o mejor';
+    return `+${relative}`;
   }
 
   static renderActiveHoleStepperCard() {
     const idx = RoundsEngine.activeMobileHole;
     const h = RoundsEngine.holeData[idx];
     if (!h) return '';
+    const isLast = idx === RoundsEngine.holeData.length - 1;
 
     return `
       <div class="mobile-hole-card">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-          <div>
-            <h4 style="font-size: 1.2rem; color: var(--gold-400);">Hoyo #${h.hole}</h4>
-            <span style="font-size: 0.8rem; color: var(--text-subtle);">Par ${h.par}</span>
+        <div class="mobile-hole-header">
+          <div class="mobile-hole-title">
+            <span>Hoyo ${h.hole} de ${RoundsEngine.holeData.length}</span>
+            <h4>Hoyo ${h.hole}</h4>
+            <strong id="active-hole-score">${RoundsEngine.holeScoreLabel(h)}</strong>
           </div>
-          <div>
-            <select class="form-control" style="padding: 0.3rem 0.6rem; min-height: 36px; width: auto;" onchange="RoundsEngine.updateHole(${idx}, 'par', parseInt(this.value)); RoundsEngine.selectHole(${idx});">
+          <div class="hole-par-control">
+            <label class="form-label" for="hole-par-${idx}">Par</label>
+            <select class="form-control" id="hole-par-${idx}" onchange="RoundsEngine.updateHole(${idx}, 'par', parseInt(this.value)); RoundsEngine.selectHole(${idx});">
               <option value="3" ${h.par === 3 ? 'selected' : ''}>Par 3</option>
               <option value="4" ${h.par === 4 ? 'selected' : ''}>Par 4</option>
               <option value="5" ${h.par === 5 ? 'selected' : ''}>Par 5</option>
@@ -424,65 +475,181 @@ class RoundsEngine {
           </div>
         </div>
 
-        <div class="grid-3" style="margin-bottom: 1rem;">
-          <!-- Strokes Stepper -->
+        <div class="quick-score-row" aria-label="Cargar golpes rápidamente">
+          <span>Score rápido</span>
           <div>
-            <label class="form-label" style="text-align: center;">Golpes Totales</label>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, -1)">−1</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 0)">Par</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 1)">+1</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 2)">+2</button>
+          </div>
+        </div>
+
+        <div class="hole-stepper-grid">
+          <div class="hole-stepper-field">
+            <label class="form-label">Golpes</label>
             <div class="stepper-control">
-              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', -1)">−</button>
+              <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', -1)" aria-label="Restar golpe">−</button>
               <span class="stepper-value" id="stepper-strokes-${idx}">${h.strokes ?? '—'}</span>
-              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', 1)">+</button>
+              <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', 1)" aria-label="Sumar golpe">+</button>
             </div>
           </div>
 
-          <!-- Putts Stepper -->
-          <div>
-            <label class="form-label" style="text-align: center;">Putts en Green</label>
+          <div class="hole-stepper-field">
+            <label class="form-label">Putts</label>
             <div class="stepper-control">
-              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', -1)">−</button>
+              <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', -1)" aria-label="Restar putt">−</button>
               <span class="stepper-value" id="stepper-putts-${idx}">${h.putts ?? '—'}</span>
-              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', 1)">+</button>
+              <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', 1)" aria-label="Sumar putt">+</button>
             </div>
           </div>
 
-          <!-- Penalty Strokes Stepper -->
-          <div>
-            <label class="form-label" style="text-align: center;">Penalidades</label>
+          <div class="hole-stepper-field hole-stepper-penalties">
+            <label class="form-label">Penalidades</label>
             <div class="stepper-control">
-              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', -1)">−</button>
+              <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', -1)" aria-label="Restar penalidad">−</button>
               <span class="stepper-value" id="stepper-penalty-${idx}">${h.penalty || 0}</span>
-              <button class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', 1)">+</button>
+              <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', 1)" aria-label="Sumar penalidad">+</button>
             </div>
           </div>
         </div>
 
-        <!-- Quick Toggles -->
-        <div style="display: flex; gap: 0.5rem; justify-content: space-around; background: var(--bg-surface); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+        <div class="round-metrics-grid" aria-label="Estadísticas opcionales del hoyo">
+          <label class="round-metric-toggle ${h.par === 3 ? 'disabled' : ''}">
             <input type="checkbox" ${h.fir ? 'checked' : ''} ${h.par === 3 ? 'disabled' : ''} onchange="RoundsEngine.updateHole(${idx}, 'fir', this.checked)">
-            Calle (FIR)
+            <span>Calle<small>FIR</small></span>
           </label>
-          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+          <label class="round-metric-toggle">
             <input type="checkbox" ${h.gir ? 'checked' : ''} onchange="RoundsEngine.updateHole(${idx}, 'gir', this.checked)">
-            Green (GIR)
+            <span>Green<small>GIR</small></span>
           </label>
-          <label style="display: flex; align-items: center; gap: 0.35rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+          <label class="round-metric-toggle">
             <input type="checkbox" ${h.bunker ? 'checked' : ''} onchange="RoundsEngine.updateHole(${idx}, 'bunker', this.checked)">
-            Bunker
+            <span>Bunker<small>Sí / no</small></span>
           </label>
         </div>
 
-        <!-- Next / Prev Hole Navigation Buttons -->
-        <div style="display: flex; justify-content: space-between; margin-top: 1rem;">
-          <button class="btn btn-secondary btn-sm" ${idx === 0 ? 'disabled style="opacity:0.4;"' : ''} onclick="RoundsEngine.selectHole(${idx - 1})">
-            ← Hoyo Anterior
+        <div class="hole-navigation-actions">
+          <button type="button" class="btn btn-secondary" ${idx === 0 ? 'disabled' : ''} onclick="RoundsEngine.selectHole(${idx - 1})">
+            Anterior
           </button>
-          <button class="btn btn-secondary btn-sm" ${idx >= RoundsEngine.holeData.length - 1 ? 'disabled style="opacity:0.4;"' : ''} onclick="RoundsEngine.selectHole(${idx + 1})">
-            Siguiente Hoyo →
+          <button type="button" class="btn btn-primary" onclick="RoundsEngine.advanceHole()">
+            ${isLast ? 'Revisar ronda' : 'Guardar y seguir'}
           </button>
         </div>
       </div>
     `;
+  }
+
+  static startScorecard() {
+    const setup = document.getElementById('round-setup-section');
+    const status = document.getElementById('round-save-status');
+    if (!GolfForm.validate(setup)) {
+      GolfForm.setStatus(status, 'Completá el nombre del campo para empezar el scorecard.', 'error');
+      return;
+    }
+    RoundsEngine.syncSetupSummary();
+    if (setup) setup.open = false;
+    GolfForm.setStatus(status);
+    document.getElementById('round-score-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  static syncSetupSummary() {
+    const summary = document.getElementById('round-setup-summary-text');
+    if (!summary) return;
+    const course = document.getElementById('round-course-input')?.value?.trim() || 'Campo pendiente';
+    const holes = document.getElementById('round-holes-select')?.value || RoundsEngine.holeData.length;
+    summary.textContent = `${course} · ${holes} hoyos`;
+  }
+
+  static setQuickScore(holeIdx, relativeToPar) {
+    const hole = RoundsEngine.holeData[holeIdx];
+    if (!hole) return;
+    hole.strokes = Math.max(1, Math.min(15, hole.par + Number(relativeToPar || 0)));
+    hole.completed = Number.isInteger(hole.putts) && hole.putts >= 0;
+    RoundsEngine.selectHole(holeIdx);
+  }
+
+  static updateHoleCardStatus() {
+    const hole = RoundsEngine.holeData[RoundsEngine.activeMobileHole];
+    const score = document.getElementById('active-hole-score');
+    if (hole && score) score.textContent = RoundsEngine.holeScoreLabel(hole);
+  }
+
+  static validateActiveHole() {
+    const hole = RoundsEngine.holeData[RoundsEngine.activeMobileHole];
+    const status = document.getElementById('round-save-status');
+    if (!hole || !Number.isInteger(hole.strokes) || !Number.isInteger(hole.putts)) {
+      GolfForm.setStatus(status, `Completá golpes y putts del hoyo ${RoundsEngine.activeMobileHole + 1}.`, 'error');
+      document.querySelector('.mobile-hole-card')?.classList.add('needs-attention');
+      return false;
+    }
+    if (hole.putts > hole.strokes || (hole.penalty || 0) > hole.strokes) {
+      GolfForm.setStatus(status, 'Los putts y las penalidades no pueden superar los golpes del hoyo.', 'error');
+      document.querySelector('.mobile-hole-card')?.classList.add('needs-attention');
+      return false;
+    }
+    document.querySelector('.mobile-hole-card')?.classList.remove('needs-attention');
+    GolfForm.setStatus(status);
+    return true;
+  }
+
+  static advanceHole() {
+    if (!RoundsEngine.validateActiveHole()) return;
+    const nextIndex = RoundsEngine.activeMobileHole + 1;
+    if (nextIndex < RoundsEngine.holeData.length) {
+      RoundsEngine.selectHole(nextIndex);
+      document.querySelector('.mobile-hole-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    GolfForm.setStatus('round-save-status', 'Scorecard completo. Revisá las notas y guardá la ronda.', 'success');
+    document.getElementById('round-notes-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  static hasRoundEntryChanges() {
+    const hasGeneralChanges = Boolean(
+      document.getElementById('round-course-input')?.value?.trim()
+      || document.getElementById('round-notes-input')?.value?.trim()
+      || document.getElementById('round-tournament-select')?.value
+      || (document.getElementById('round-kind-select')?.value || 'Práctica') !== 'Práctica'
+    );
+    const hasScore = RoundsEngine.holeData.some((hole) => (
+      Number.isInteger(hole.strokes)
+      || Number.isInteger(hole.putts)
+      || Number(hole.penalty) > 0
+      || hole.fir !== null
+      || hole.gir !== null
+      || hole.bunker
+    ));
+    return hasGeneralChanges || hasScore;
+  }
+
+  static cancelRoundEntry() {
+    if (!RoundsEngine.hasRoundEntryChanges()) {
+      App.closeModal();
+      return;
+    }
+    const now = Date.now();
+    if (RoundsEngine.discardArmedUntil > now) {
+      App.closeModal();
+      return;
+    }
+
+    RoundsEngine.discardArmedUntil = now + 5000;
+    const button = document.getElementById('round-cancel-btn');
+    if (button) {
+      button.textContent = 'Descartar carga';
+      button.classList.add('btn-danger-soft');
+    }
+    GolfForm.setStatus('round-save-status', 'La ronda todavía no se guardó. Tocá “Descartar carga” para salir.', 'error');
+    if (RoundsEngine.discardResetTimer) window.clearTimeout(RoundsEngine.discardResetTimer);
+    RoundsEngine.discardResetTimer = window.setTimeout(() => {
+      RoundsEngine.discardArmedUntil = 0;
+      if (button?.isConnected) {
+        button.textContent = 'Cancelar';
+        button.classList.remove('btn-danger-soft');
+      }
+    }, 5000);
   }
 
   static adjustStepper(holeIdx, field, delta) {
@@ -507,6 +674,7 @@ class RoundsEngine {
 
     const chipsContainer = document.getElementById('hole-chips-container');
     if (chipsContainer) chipsContainer.innerHTML = RoundsEngine.renderHolePaginationChips();
+    RoundsEngine.updateHoleCardStatus();
     RoundsEngine.updateLiveTotals();
   }
 
@@ -515,6 +683,7 @@ class RoundsEngine {
       RoundsEngine.holeData[index][field] = value;
       const h = RoundsEngine.holeData[index];
       h.completed = Number.isInteger(h.strokes) && h.strokes > 0 && Number.isInteger(h.putts) && h.putts >= 0;
+      RoundsEngine.updateHoleCardStatus();
       RoundsEngine.updateLiveTotals();
     }
   }
@@ -523,6 +692,7 @@ class RoundsEngine {
     const count = parseInt(countStr);
     RoundsEngine.initHoleData(count);
     RoundsEngine.selectHole(0);
+    RoundsEngine.syncSetupSummary();
     RoundsEngine.updateLiveTotals();
   }
 
@@ -546,6 +716,26 @@ class RoundsEngine {
       label.innerText = completedHoles.length
         ? `${completedHoles.length}/${RoundsEngine.holeData.length} hoyos · ${totScore} golpes (${diffStr}) · ${totPutts} putts`
         : `0 de ${RoundsEngine.holeData.length} hoyos completos`;
+    }
+
+    const totalHoles = RoundsEngine.holeData.length;
+    const completedCount = completedHoles.length;
+    const progressLabel = document.getElementById('round-progress-label');
+    const progressScore = document.getElementById('round-progress-score');
+    const progressPutts = document.getElementById('round-progress-putts');
+    const progressStatus = document.getElementById('round-progress-status');
+    const progressFill = document.getElementById('round-progress-fill');
+    const nextIncomplete = RoundsEngine.holeData.findIndex((hole) => !hole.completed);
+    if (progressLabel) progressLabel.textContent = `${completedCount} de ${totalHoles} hoyos`;
+    if (progressScore) progressScore.textContent = completedCount ? `${totScore} golpes · ${diffStr}` : 'Sin score';
+    if (progressPutts) progressPutts.textContent = `${totPutts} putt${totPutts === 1 ? '' : 's'}`;
+    if (progressStatus) progressStatus.textContent = nextIncomplete >= 0 ? `Próximo: hoyo ${nextIncomplete + 1}` : 'Scorecard completo';
+    if (progressFill) progressFill.style.width = `${totalHoles ? (completedCount / totalHoles) * 100 : 0}%`;
+
+    const saveButton = document.getElementById('round-save-btn');
+    if (saveButton) {
+      saveButton.disabled = completedCount !== totalHoles;
+      saveButton.textContent = completedCount === totalHoles ? 'Guardar ronda' : `Completar · ${completedCount}/${totalHoles}`;
     }
   }
 
@@ -664,6 +854,8 @@ class RoundsEngine {
 
   static async saveNewRound() {
     const roundContext = RoundsEngine.roundPlayerContext;
+    const form = document.getElementById('round-entry-form');
+    const status = document.getElementById('round-save-status');
     const authenticatedWithoutCoachRole = Boolean(
       window.AuthEngine?.user && !window.AuthEngine?.isCoach?.()
     );
@@ -681,6 +873,11 @@ class RoundsEngine {
       return;
     }
 
+    if (!GolfForm.validate(form)) {
+      GolfForm.setStatus(status, 'Revisá los campos marcados antes de guardar.', 'error');
+      return;
+    }
+
     const course = document.getElementById('round-course-input')?.value?.trim() || '';
     const date = document.getElementById('round-date-input')?.value || GolfUtils.localDateISO();
     const notes = document.getElementById('round-notes-input')?.value || '';
@@ -689,15 +886,10 @@ class RoundsEngine {
       ? 'Torneo'
       : (document.getElementById('round-kind-select')?.value || 'Práctica');
 
-    if (!course) {
-      App.showToast('Ingresá el nombre del campo.');
-      document.getElementById('round-course-input')?.focus();
-      return;
-    }
-
     const incompleteIndex = RoundsEngine.holeData.findIndex((hole) => !hole.completed);
     if (incompleteIndex >= 0) {
       RoundsEngine.selectHole(incompleteIndex);
+      GolfForm.setStatus(status, `Completá golpes y putts del hoyo ${incompleteIndex + 1} antes de guardar.`, 'error');
       App.showToast(`Completá golpes y putts del hoyo ${incompleteIndex + 1} antes de guardar.`);
       return;
     }
@@ -707,16 +899,15 @@ class RoundsEngine {
     ));
     if (inconsistentIndex >= 0) {
       RoundsEngine.selectHole(inconsistentIndex);
+      GolfForm.setStatus(status, `Revisá putts y penalidades del hoyo ${inconsistentIndex + 1}.`, 'error');
       App.showToast(`Revisá putts y penalidades del hoyo ${inconsistentIndex + 1}.`);
       return;
     }
 
     const saveButton = document.getElementById('round-save-btn');
     if (saveButton?.disabled) return;
-    if (saveButton) {
-      saveButton.disabled = true;
-      saveButton.textContent = 'Guardando ronda…';
-    }
+    GolfForm.setBusy(saveButton, true, 'Guardando ronda…');
+    GolfForm.setStatus(status);
 
     let totalScore = 0;
     let totalPar = 0;
@@ -781,17 +972,15 @@ class RoundsEngine {
       const playerName = roundContext.playerName;
       RoundsEngine.roundPlayerContext = null;
       App.closeModal();
-      App.showToast(`Ronda guardada en la ficha de ${playerName}.`);
+      App.showSaveConfirmation('Ronda guardada', `El scorecard quedó asociado a la ficha de ${playerName}.`);
       RoundsEngine.renderRoundsView();
       if (window.App && App.renderDashboard) App.renderDashboard();
       if (window.PlayerEngine && App.currentView === 'players') PlayerEngine.renderPlayersView();
     } catch (error) {
       console.error('No se pudo guardar la ronda:', error);
+      GolfForm.setStatus(status, 'No se pudo guardar la ronda. Tus datos siguen en pantalla.', 'error');
       App.showToast('No se pudo guardar la ronda.');
-      if (saveButton) {
-        saveButton.disabled = false;
-        saveButton.textContent = '💾 Guardar Ronda';
-      }
+      GolfForm.setBusy(saveButton, false);
     }
   }
 }

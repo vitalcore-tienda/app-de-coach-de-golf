@@ -5,6 +5,8 @@
 class PWAEngine {
   static deferredInstallPrompt = null;
   static initialized = false;
+  static statusTimer = null;
+  static syncIssue = null;
 
   static init() {
     if (PWAEngine.initialized) return;
@@ -22,7 +24,7 @@ class PWAEngine {
       PWAEngine.showToast('📲 GolfCoach quedó instalado en este dispositivo.');
     });
 
-    window.addEventListener('online', () => PWAEngine.updateConnectivityStatus());
+    window.addEventListener('online', () => PWAEngine.updateConnectivityStatus({ recovered: true }));
     window.addEventListener('offline', () => PWAEngine.updateConnectivityStatus());
 
     PWAEngine.updateInstallButton();
@@ -125,7 +127,7 @@ class PWAEngine {
     }
   }
 
-  static updateConnectivityStatus() {
+  static statusElement() {
     let status = document.getElementById('network-status');
     if (!status) {
       status = document.createElement('div');
@@ -134,12 +136,86 @@ class PWAEngine {
       status.setAttribute('role', 'status');
       document.body.appendChild(status);
     }
+    return status;
+  }
+
+  static renderConnectivityBanner({ mode, title, message, actionLabel = '', onAction = null }) {
+    const status = PWAEngine.statusElement();
+    const icons = { offline: '📴', 'sync-error': '⚠️', recovered: '📶' };
+    status.className = `network-status is-${mode}`;
+    status.hidden = false;
+    const icon = document.createElement('span');
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = icons[mode] || '📶';
+    const copy = document.createElement('div');
+    copy.className = 'network-status-copy';
+    const heading = document.createElement('strong');
+    heading.textContent = title;
+    const body = document.createElement('span');
+    body.textContent = message;
+    copy.replaceChildren(heading, body);
+    status.replaceChildren(icon, copy);
+    if (actionLabel && typeof onAction === 'function') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn btn-secondary btn-sm';
+      button.textContent = actionLabel;
+      button.addEventListener('click', onAction);
+      status.append(button);
+    }
+  }
+
+  static updateConnectivityStatus({ recovered = false } = {}) {
+    window.clearTimeout(PWAEngine.statusTimer);
+    const status = PWAEngine.statusElement();
 
     const offline = navigator.onLine === false;
-    status.hidden = !offline;
-    status.innerHTML = offline
-      ? '<span>📴</span> Sin conexión: los cambios quedan guardados en este dispositivo.'
-      : '';
+    if (offline) {
+      PWAEngine.renderConnectivityBanner({
+        mode: 'offline',
+        title: 'Estás sin conexión',
+        message: 'Las fichas y rondas locales siguen disponibles. El respaldo cloud esperará a que vuelva internet.',
+        actionLabel: window.CloudSync?.isCoachReady?.() ? 'Ver pendientes' : '',
+        onAction: () => CloudSync.openSyncModal()
+      });
+      return;
+    }
+
+    if (PWAEngine.syncIssue) {
+      PWAEngine.renderConnectivityBanner({
+        mode: 'sync-error',
+        title: 'La sincronización necesita atención',
+        message: PWAEngine.syncIssue.message,
+        actionLabel: window.CloudSync?.isCoachReady?.() ? 'Revisar' : '',
+        onAction: () => CloudSync.openSyncModal()
+      });
+      return;
+    }
+
+    if (recovered) {
+      PWAEngine.renderConnectivityBanner({
+        mode: 'recovered',
+        title: 'Conexión recuperada',
+        message: 'GolfCoach retomará automáticamente los respaldos pendientes.'
+      });
+      PWAEngine.statusTimer = window.setTimeout(() => {
+        if (!PWAEngine.syncIssue && navigator.onLine !== false) status.hidden = true;
+      }, 3600);
+      return;
+    }
+
+    status.hidden = true;
+  }
+
+  static reportSyncIssue(message) {
+    PWAEngine.syncIssue = { message: String(message || 'Quedaron cambios pendientes de respaldo.') };
+    PWAEngine.updateConnectivityStatus();
+  }
+
+  static clearSyncIssue({ announce = false } = {}) {
+    const hadIssue = Boolean(PWAEngine.syncIssue);
+    PWAEngine.syncIssue = null;
+    PWAEngine.updateConnectivityStatus({ recovered: announce && hadIssue });
   }
 
   static handleLaunchShortcut() {

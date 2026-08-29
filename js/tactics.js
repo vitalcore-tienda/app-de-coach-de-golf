@@ -26,16 +26,16 @@ class TacticsEngine {
     if (!container) return;
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Caddy Virtual & Estrategia de Campo</h2>
             <p>Toma decisiones inteligentes como un golfista de torneo y elimina los errores innecesarios.</p>
           </div>
         </div>
       </div>
 
-      <div class="caddy-calculator" style="margin-bottom: 2rem;">
+      <div class="caddy-calculator layout-section">
         <!-- Inputs Card -->
         <div class="card">
           <div class="card-header">
@@ -103,31 +103,31 @@ class TacticsEngine {
           <span class="badge badge-green">Estrategia SotaPar</span>
         </div>
 
-        <div class="grid-2" style="margin-top: 1.25rem;">
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">🎯 1. Olvida la Bandera en los Pares 3</h4>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+        <div class="grid-2 insight-grid">
+          <div class="insight-card">
+            <h4 class="icon-heading">🎯 1. Olvida la Bandera en los Pares 3</h4>
+            <p>
               El 90% de los golfistas aficionados dejan golpes en los pares 3 por atacar banderas escondidas. Apunta SIEMPRE al centro geométrico del green; tu peor resultado será un cómodo putt de dos toques.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">🛡️ 2. Elimina el Lado del Peligro</h4>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+          <div class="insight-card">
+            <h4 class="icon-heading">🛡️ 2. Elimina el Lado del Peligro</h4>
+            <p>
               Si hay agua u obstáculos a la derecha del fairway, colócate a la derecha del tee y apunta hacia la izquierda. Concédele al campo el fallo en el sector seguro.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">🛑 3. El Golpe de Rescate debe ser Seguro</h4>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+          <div class="insight-card">
+            <h4 class="icon-heading">🛑 3. El Golpe de Rescate debe ser Seguro</h4>
+            <p>
               Tras caer en árboles o un mal lie, nunca intentes el golpe "milagroso" a través de una ventana estrecha. Saca la bola al fairway con hierro corto. El bogey es aceptable; el triple bogey destruye la tarjeta.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <h4 class="icon-heading" style="color: var(--gold-400); margin-bottom: 0.4rem;">📏 4. Deja tu Distancia Favorita de Wedge</h4>
-            <p style="font-size: 0.88rem; color: var(--text-muted);">
+          <div class="insight-card">
+            <h4 class="icon-heading">📏 4. Deja tu Distancia Favorita de Wedge</h4>
+            <p>
               En los Pares 5, en lugar de intentar un segundo tiro forzado a 40 metros del green en posición incómoda, calcula un layup que te deje exactamente a tu distancia de swing completo de Sand Wedge (ej. 80 metros).
             </p>
           </div>

@@ -236,19 +236,21 @@ class AssessmentEngine {
     const saved = StorageManager.getAssessment();
     
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Diagnóstico 360° del Golfista</h2>
             <p>Evalúa tus 5 pilares clave para identificar tus mayores áreas de mejora y bajar tu hándicap.</p>
           </div>
-          <button class="btn btn-primary" onclick="AssessmentEngine.startQuiz()">
-            <span class="nav-icon">✨</span> ${saved.completed ? 'Repetir Evaluación' : 'Comenzar Test 360°'}
-          </button>
+          <div class="view-actions">
+            <button class="btn btn-primary" onclick="AssessmentEngine.startQuiz()">
+              <span class="nav-icon">✨</span> ${saved.completed ? 'Repetir Evaluación' : 'Comenzar Test 360°'}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="grid-2" style="margin-bottom: 2rem;">
+      <div class="grid-2 layout-section">
         <div class="card">
           <div class="card-header">
             <div class="card-title-group">
@@ -528,7 +530,7 @@ class AssessmentEngine {
       }
       await StorageManager.saveAssessment(assessmentData);
       App.closeModal();
-      App.showToast('✅ ¡Diagnóstico 360° completado con éxito!');
+      App.showSaveConfirmation('Diagnóstico 360° guardado', 'El informe y las recomendaciones quedaron actualizados.');
 
       // Re-render views
       AssessmentEngine.renderDiagnosticView();

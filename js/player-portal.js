@@ -180,13 +180,7 @@ class PlayerPortal {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
     PlayerPortal.setPlayerNavigationVisible(false);
-    container.innerHTML = `
-      <div class="card portal-account-pending">
-        <div class="card-icon">⛳</div>
-        <h2>Preparando tu espacio de golf</h2>
-        <p style="margin-top:0.55rem;">Cargando tu handicap, entrenamientos y próximos torneos…</p>
-      </div>
-    `;
+    container.innerHTML = GolfUI.loading('portal', 'Cargando tu hándicap, entrenamientos y próximos torneos…');
   }
 
   static async load({ force = false, identityContext = null } = {}) {
@@ -380,7 +374,7 @@ class PlayerPortal {
         <button class="btn btn-secondary player-portal-refresh" id="player-portal-refresh-btn" ${navigator.onLine === false ? 'disabled' : ''}>↻ Actualizar</button>
       </div>
 
-      <div class="grid-4" style="margin-bottom:1.25rem;">
+      <div class="grid-4 layout-section">
         <div class="card stat-card">
           <div class="stat-label">Handicap actual</div>
           <div class="stat-value" style="color:var(--gold-400);">${currentHandicap}</div>
@@ -437,7 +431,7 @@ class PlayerPortal {
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:1.25rem;">
+      <div class="card layout-section">
         <div class="card-header">
           <div class="card-title-group"><div class="card-icon">📊</div><h3 class="card-title">Resultados y rondas</h3></div>
           <span class="badge badge-blue">${data.rounds.length} registradas</span>
@@ -665,18 +659,21 @@ class PlayerPortal {
 
   static async updateAssignmentStatus(assignmentId, status, button) {
     if (!PlayerPortal.validUuid(assignmentId) || !['in_progress', 'completed'].includes(status)) return;
-    if (button) button.disabled = true;
+    GolfForm.setBusy(button, true, status === 'completed' ? 'Guardando…' : 'Iniciando…');
     try {
       const { error } = await AuthEngine.client
         .from('training_assignments')
         .update({ status })
         .eq('id', assignmentId);
       if (error) throw error;
-      App.showToast(status === 'completed' ? '✅ Entrenamiento completado.' : '▶ Entrenamiento iniciado.');
+      App.showSaveConfirmation(
+        status === 'completed' ? 'Entrenamiento completado' : 'Entrenamiento iniciado',
+        'Tu entrenador podrá ver este cambio en el seguimiento.'
+      );
       await PlayerPortal.load({ force: true });
     } catch (error) {
       App.showToast(PlayerPortal.readableError(error));
-      if (button) button.disabled = false;
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -692,14 +689,15 @@ class PlayerPortal {
       App.showToast('El mensaje es demasiado largo.');
       return;
     }
-    if (button) button.disabled = true;
+    GolfForm.setBusy(button, true, 'Enviando…');
     try {
       await PlayerPortal.insertMessage(PlayerPortal.data?.player?.id, 'player', body);
       if (input) input.value = '';
       await PlayerPortal.load({ force: true });
+      App.showSaveConfirmation('Mensaje enviado', 'Tu entrenador ya puede verlo en la conversación.');
     } catch (error) {
       App.showToast(PlayerPortal.readableError(error));
-      if (button) button.disabled = false;
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -744,7 +742,7 @@ class PlayerPortal {
       return;
     }
 
-    container.innerHTML = '<div class="card portal-account-pending"><div class="card-icon">💬</div><h2>Preparando conversaciones…</h2></div>';
+    container.innerHTML = GolfUI.loading('messages', 'Cargando conversaciones con golfistas…');
     try {
       const players = await StorageManager.getPlayers();
       if (!players.length) {
@@ -844,18 +842,39 @@ class PlayerPortal {
 
       AuthEngine.renderModal(`
         <div class="modal-handle-bar"></div>
-        <div class="modal-header"><div><span class="badge badge-gold">Plan del golfista</span><h3 style="margin-top:0.3rem;">Asignar a ${PlayerPortal.escapeHTML(player.name)}</h3></div><button class="modal-close" onclick="App.closeModal()">&times;</button></div>
-        <div class="form-group"><label class="form-label" for="coach-training-template">Plantilla de drill</label><select class="form-control" id="coach-training-template"><option value="">Plan personalizado</option>${options}</select></div>
-        <div class="form-group"><label class="form-label" for="coach-training-title">Título *</label><input class="form-control" id="coach-training-title" maxlength="160" placeholder="Ej.: Control de distancia con wedges"></div>
-        <div class="form-group"><label class="form-label" for="coach-training-category">Categoría</label><select class="form-control" id="coach-training-category">${PlayerPortal.trainingCategoryOptions()}</select></div>
-        <div class="form-group"><label class="form-label" for="coach-training-instructions">Indicaciones</label><textarea class="form-control" id="coach-training-instructions" rows="5" maxlength="4000" placeholder="Objetivo, repeticiones y puntos de control…"></textarea></div>
-        <div class="form-group"><label class="form-label" for="coach-training-due-date">Fecha objetivo</label><input class="form-control" id="coach-training-due-date" type="date" value="${tomorrow}"></div>
-        <div id="coach-training-status" role="status" aria-live="polite" style="min-height:1.2rem; color:var(--text-muted); font-size:0.82rem;"></div>
-        <button class="btn btn-primary" id="coach-training-save-btn" style="width:100%;">Asignar entrenamiento</button>
+        <div class="modal-header">
+          <div class="modal-heading">
+            <span class="modal-eyebrow">Plan de entrenamiento</span>
+            <h3 class="modal-title">Asignar entrenamiento</h3>
+            <p class="modal-description">Prepará una tarea clara para ${PlayerPortal.escapeHTML(player.name)} y definí cuándo debería completarla.</p>
+          </div>
+          <button class="modal-close" type="button" onclick="App.closeModal()" aria-label="Cerrar ventana">&times;</button>
+        </div>
+        <form class="app-form" id="coach-training-form" novalidate>
+          <section class="form-section">
+            <div class="form-section-title">Contenido del plan</div>
+            <div class="form-group"><label class="form-label" for="coach-training-template">Usar plantilla</label><select class="form-control" id="coach-training-template"><option value="">Plan personalizado</option>${options}</select><span class="form-hint">Elegir un drill completa automáticamente el título y las indicaciones.</span></div>
+            <div class="form-group"><label class="form-label" for="coach-training-title">Título <span class="form-required" aria-hidden="true">*</span></label><input class="form-control" id="coach-training-title" maxlength="160" placeholder="Ej.: Control de distancia con wedges" data-required-message="Ingresá un título para el entrenamiento." required></div>
+            <div class="form-grid-2">
+              <div class="form-group"><label class="form-label" for="coach-training-category">Categoría</label><select class="form-control" id="coach-training-category">${PlayerPortal.trainingCategoryOptions()}</select></div>
+              <div class="form-group"><label class="form-label" for="coach-training-due-date">Fecha objetivo</label><input class="form-control" id="coach-training-due-date" type="date" value="${tomorrow}"></div>
+            </div>
+            <div class="form-group" style="margin-top:0.8rem;"><label class="form-label" for="coach-training-instructions">Indicaciones</label><textarea class="form-control" id="coach-training-instructions" rows="5" maxlength="4000" placeholder="Objetivo, repeticiones y puntos de control…"></textarea><span class="form-hint">Incluí cantidad de repeticiones, duración y un criterio para darlo por cumplido.</span></div>
+          </section>
+          <div class="form-status" id="coach-training-status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button class="btn btn-secondary" type="button" onclick="App.closeModal()">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="coach-training-save-btn">Asignar entrenamiento</button>
+          </div>
+        </form>
       `);
 
       document.getElementById('coach-training-template')?.addEventListener('change', (event) => PlayerPortal.applyDrillTemplate(event.target.value));
-      document.getElementById('coach-training-save-btn')?.addEventListener('click', () => PlayerPortal.saveCoachTraining());
+      document.getElementById('coach-training-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        PlayerPortal.saveCoachTraining();
+      });
+      window.setTimeout(() => document.getElementById('coach-training-title')?.focus(), 0);
     } catch (error) {
       App.showToast(PlayerPortal.readableError(error));
     }
@@ -877,16 +896,22 @@ class PlayerPortal {
     const context = PlayerPortal.coachContext;
     const button = document.getElementById('coach-training-save-btn');
     const status = document.getElementById('coach-training-status');
+    const form = document.getElementById('coach-training-form');
+    if (!GolfForm.validate(form)) {
+      GolfForm.setStatus(status, 'Revisá los campos marcados antes de asignar.', 'error');
+      return;
+    }
     const title = String(document.getElementById('coach-training-title')?.value || '').trim();
     const instructions = String(document.getElementById('coach-training-instructions')?.value || '').trim();
     const category = document.getElementById('coach-training-category')?.value || 'general';
     const dueDate = document.getElementById('coach-training-due-date')?.value || null;
     if (!context || !title) {
-      if (status) status.textContent = 'Ingresá un título para el entrenamiento.';
+      GolfForm.setStatus(status, 'No se pudo identificar el golfista o el entrenamiento.', 'error');
       return;
     }
 
-    if (button) button.disabled = true;
+    GolfForm.setBusy(button, true, 'Asignando…');
+    GolfForm.setStatus(status);
     try {
       const { error } = await AuthEngine.client.from('training_assignments').insert({
         player_id: context.remotePlayerId,
@@ -899,10 +924,10 @@ class PlayerPortal {
       });
       if (error) throw error;
       App.closeModal();
-      App.showToast('🎯 Entrenamiento asignado al golfista.');
+      App.showSaveConfirmation('Entrenamiento asignado', 'El golfista ya puede verlo en su plan.');
     } catch (error) {
-      if (status) status.textContent = PlayerPortal.readableError(error);
-      if (button) button.disabled = false;
+      GolfForm.setStatus(status, PlayerPortal.readableError(error), 'error');
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -914,7 +939,7 @@ class PlayerPortal {
       AuthEngine.renderModal(`
         <div class="modal-handle-bar"></div>
         <div class="modal-header"><div><span class="badge badge-green">Conversación privada</span><h3 style="margin-top:0.3rem;">${PlayerPortal.escapeHTML(player.name)}</h3></div><button class="modal-close" onclick="App.closeModal()">&times;</button></div>
-        <div id="coach-message-thread"><p style="color:var(--text-muted);">Cargando mensajes…</p></div>
+        <div id="coach-message-thread">${GolfUI.loading('thread', 'Cargando mensajes…')}</div>
       `);
       await PlayerPortal.loadCoachMessages();
     } catch (error) {
@@ -961,14 +986,16 @@ class PlayerPortal {
       input?.focus();
       return;
     }
-    if (button) button.disabled = true;
+    GolfForm.setStatus(status, '', '');
+    GolfForm.setBusy(button, true, 'Enviando…');
     try {
       await PlayerPortal.insertMessage(context.remotePlayerId, 'coach', body);
       if (input) input.value = '';
       await PlayerPortal.loadCoachMessages();
+      App.showSaveConfirmation('Mensaje enviado', 'El golfista ya puede verlo en su portal.');
     } catch (error) {
-      if (status) status.textContent = PlayerPortal.readableError(error);
-      if (button) button.disabled = false;
+      GolfForm.setStatus(status, PlayerPortal.readableError(error), 'error');
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -1051,11 +1078,29 @@ class PlayerPortal {
 
   static readableError(error) {
     const message = String(error?.message || error || '').toLowerCase();
-    if (AuthEngine.isNetworkError?.(error)) return 'No se pudo conectar. Intentá nuevamente cuando tengas conexión.';
-    if (message.includes('row-level security') || message.includes('permission denied')) return 'Tu cuenta no tiene permiso para modificar esta ficha.';
+    const kind = PlayerPortal.errorKind(error);
+    if (kind === 'network') return 'No se pudo conectar ni sincronizar este cambio. Revisá internet e intentá nuevamente; tus datos anteriores siguen seguros.';
+    if (kind === 'permission') return 'Tu cuenta no tiene permiso para modificar esta ficha.';
+    if (kind === 'duplicate') return 'Este dato ya existe. Actualizá la vista antes de volver a guardarlo.';
     if (message.includes('relation') && (message.includes('training_assignments') || message.includes('player_messages'))) return 'La actualización del portal todavía no fue aplicada en la base de datos.';
     if (message.includes('ficha cloud')) return error.message;
     return 'No se pudo completar la acción. Tus demás datos no se modificaron.';
+  }
+
+  static errorKind(error) {
+    const code = String(error?.code || '').toUpperCase();
+    const status = Number(error?.status || error?.statusCode || 0);
+    const message = String(error?.message || error || '').toLowerCase();
+    if (
+      navigator.onLine === false ||
+      AuthEngine.isNetworkError?.(error) ||
+      /^PGRST00[0-3]$/.test(code) ||
+      code.startsWith('08') ||
+      [408, 503, 504, 520].includes(status)
+    ) return 'network';
+    if (code === '42501' || [401, 403].includes(status) || message.includes('row-level security') || message.includes('permission denied')) return 'permission';
+    if (code === '23505' || status === 409 || message.includes('duplicate key') || message.includes('unique constraint')) return 'duplicate';
+    return 'unknown';
   }
 
   static escapeHTML(value) {

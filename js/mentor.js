@@ -145,13 +145,13 @@ class MentorEngine {
     const notes = StorageManager.getNotes();
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Centro de Mentoría & Metas</h2>
             <p>Consejos expertos basados en la metodología de SotaPar, seguimiento de metas SMART y diario de sensaciones.</p>
           </div>
-          <div style="display: flex; gap: 0.75rem;">
+          <div class="view-actions">
             <button class="btn btn-primary" onclick="MentorEngine.openNewGoalModal()">
               🎯 Añadir Nueva Meta
             </button>
@@ -162,7 +162,7 @@ class MentorEngine {
         </div>
       </div>
 
-      <div class="grid-2" style="margin-bottom: 2rem;">
+      <div class="grid-2 layout-section">
         <!-- Coach AI Chat Container -->
         <div class="chat-container">
           <div class="chat-header">
@@ -197,7 +197,7 @@ class MentorEngine {
         </div>
 
         <!-- Goals & Notes Column -->
-        <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+        <div class="content-stack">
           <!-- SMART Goals Card -->
           <div class="card">
             <div class="card-header">
@@ -334,59 +334,68 @@ class MentorEngine {
     if (!modal || !modalContent) return;
 
     modalContent.innerHTML = `
+      <div class="modal-handle-bar"></div>
       <div class="modal-header">
-        <div>
-          <span class="badge badge-gold" style="margin-bottom: 0.35rem;">Planificación Deportiva</span>
-          <h3>Nueva Meta de Golf (SMART)</h3>
+        <div class="modal-heading">
+          <span class="modal-eyebrow">Planificación deportiva</span>
+          <h3 class="modal-title">Agregar meta</h3>
+          <p class="modal-description">Definí un objetivo concreto, una fecha y el punto de partida para medir el progreso.</p>
         </div>
-        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+        <button class="modal-close" type="button" onclick="App.closeModal()" aria-label="Cerrar ventana">&times;</button>
       </div>
-
-      <div class="form-group">
-        <label class="form-label">Título del Objetivo</label>
-        <input type="text" class="form-control" id="goal-title-input" placeholder="ej. Bajar a 14 de hándicap o embocar 90% de putts a 1 metro">
-      </div>
-
-      <div class="grid-2">
-        <div class="form-group">
-          <label class="form-label">Categoría</label>
-          <select class="form-control" id="goal-cat-select">
-            <option value="Handicap">Hándicap</option>
-            <option value="Juego Corto">Juego Corto</option>
-            <option value="Swing & Drive">Swing & Drive</option>
-            <option value="Juego Mental">Juego Mental</option>
-            <option value="Físico">Físico & Movilidad</option>
-          </select>
+      <form class="app-form" id="goal-form" onsubmit="event.preventDefault(); MentorEngine.saveNewGoal();" novalidate>
+        <section class="form-section">
+          <div class="form-section-title">Objetivo SMART</div>
+          <div class="form-group">
+            <label class="form-label" for="goal-title-input">Objetivo <span class="form-required" aria-hidden="true">*</span></label>
+            <input type="text" class="form-control" id="goal-title-input" maxlength="180" placeholder="Ej.: Bajar a 14 de hándicap" data-required-message="Escribí el objetivo de la meta." required>
+            <span class="form-hint">Debe ser específico y fácil de comprobar.</span>
+          </div>
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label class="form-label" for="goal-cat-select">Categoría</label>
+              <select class="form-control" id="goal-cat-select">
+                <option value="Handicap">Hándicap</option>
+                <option value="Juego Corto">Juego Corto</option>
+                <option value="Swing & Drive">Swing & Drive</option>
+                <option value="Juego Mental">Juego Mental</option>
+                <option value="Físico">Físico & Movilidad</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="goal-date-input">Fecha objetivo <span class="form-required" aria-hidden="true">*</span></label>
+              <input type="date" class="form-control" id="goal-date-input" value="${GolfUtils.localDateISO()}" required>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:0.8rem;">
+            <label class="form-label" for="goal-progress-input">Progreso inicial (%)</label>
+            <input type="number" class="form-control" id="goal-progress-input" value="0" min="0" max="100" required>
+            <span class="form-hint">Usá 0% si el trabajo todavía no comenzó.</span>
+          </div>
+        </section>
+        <div class="form-status" id="goal-save-status" role="status" aria-live="polite"></div>
+        <div class="form-actions">
+          <button class="btn btn-secondary" type="button" onclick="App.closeModal()">Cancelar</button>
+          <button class="btn btn-primary" type="submit" id="goal-save-btn">Guardar meta</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">Fecha Objetivo</label>
-          <input type="date" class="form-control" id="goal-date-input" value="${GolfUtils.localDateISO()}">
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">Progreso Inicial (%)</label>
-        <input type="number" class="form-control" id="goal-progress-input" value="20" min="0" max="100">
-      </div>
-
-      <div style="margin-top: 1.5rem; text-align: right;">
-        <button class="btn btn-primary" id="goal-save-btn" onclick="MentorEngine.saveNewGoal()">Guardar Meta</button>
-      </div>
+      </form>
     `;
 
     App.openModal();
+    window.setTimeout(() => document.getElementById('goal-title-input')?.focus(), 0);
   }
 
   static async saveNewGoal() {
+    const form = document.getElementById('goal-form');
+    const status = document.getElementById('goal-save-status');
+    if (!GolfForm.validate(form)) {
+      GolfForm.setStatus(status, 'Revisá los campos marcados antes de guardar.', 'error');
+      return;
+    }
     const title = document.getElementById('goal-title-input')?.value || '';
     const category = document.getElementById('goal-cat-select')?.value || 'Handicap';
     const targetDate = document.getElementById('goal-date-input')?.value || '';
     const progress = MentorEngine.clampProgress(document.getElementById('goal-progress-input')?.value);
-
-    if (!title.trim()) {
-      App.showToast('Por favor escribe el título de la meta.');
-      return;
-    }
 
     const goals = StorageManager.getGoals();
     goals.push({
@@ -400,14 +409,16 @@ class MentorEngine {
     const button = document.getElementById('goal-save-btn');
     if (button?.disabled) return;
     try {
-      if (button) button.disabled = true;
+      GolfForm.setBusy(button, true);
+      GolfForm.setStatus(status);
       await StorageManager.saveGoals(goals);
       App.closeModal();
-      App.showToast('🎯 Meta guardada en tu plan de temporada.');
+      App.showSaveConfirmation('Meta guardada', 'El objetivo ya forma parte del plan de temporada.');
       MentorEngine.renderMentorView();
     } catch (error) {
       console.error('No se pudo guardar la meta:', error);
-      if (button) button.disabled = false;
+      GolfForm.setBusy(button, false);
+      GolfForm.setStatus(status, 'No se pudo guardar la meta. Intentá nuevamente.', 'error');
       App.showToast('No se pudo guardar la meta. Intentá nuevamente.');
     }
   }
@@ -465,14 +476,14 @@ class MentorEngine {
     const button = document.getElementById('note-save-btn');
     if (button?.disabled) return;
     try {
-      if (button) button.disabled = true;
+      GolfForm.setBusy(button, true, 'Guardando nota…');
       await StorageManager.saveNotes(notes);
       App.closeModal();
-      App.showToast('📝 Entrada guardada en tu diario de sensaciones.');
+      App.showSaveConfirmation('Nota guardada', 'La entrada quedó disponible en el diario de sensaciones.');
       MentorEngine.renderMentorView();
     } catch (error) {
       console.error('No se pudo guardar la nota:', error);
-      if (button) button.disabled = false;
+      GolfForm.setBusy(button, false);
       App.showToast('No se pudo guardar la nota. Intentá nuevamente.');
     }
   }

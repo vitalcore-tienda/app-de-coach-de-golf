@@ -42,16 +42,16 @@ class MentalEngine {
     if (!container) return;
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Juego Mental & Rutina Pre-Golpe</h2>
             <p><em>"El golf es 90% mental y 10% técnica."</em> Desarrolla una mente inquebrantable bajo presión.</p>
           </div>
         </div>
       </div>
 
-      <div class="grid-2" style="margin-bottom: 2rem;">
+      <div class="grid-2 layout-section">
         <!-- Box Breathing Interactive Card -->
         <div class="card breathing-card">
           <div class="card-header" style="width: 100%;">
@@ -62,7 +62,7 @@ class MentalEngine {
             <span class="badge badge-gold">Calma Cardíaca</span>
           </div>
 
-          <p style="font-size: 0.9rem; color: var(--text-muted);">
+          <p class="content-copy">
             Técnica utilizada por jugadores de élite y atletas olímpicos para reducir pulsaciones y eliminar la tensión muscular antes del tee del 1.
           </p>
 
@@ -94,7 +94,7 @@ class MentalEngine {
             <span class="badge badge-green">5 Pasos Clave</span>
           </div>
 
-          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+          <p class="content-copy">
             Repite esta secuencia mental exactamente igual en el tee de salida, en el fairway y en el putt:
           </p>
 
@@ -113,7 +113,7 @@ class MentalEngine {
       </div>
 
       <!-- Emotional Reset Protocol -->
-      <div class="card" style="margin-bottom: 2rem;">
+      <div class="card layout-section">
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon">⚡</div>
@@ -122,24 +122,24 @@ class MentalEngine {
           <span class="badge badge-blue">Resiliencia en Campo</span>
         </div>
 
-        <div class="grid-3" style="margin-top: 1rem;">
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+        <div class="grid-3 insight-grid">
+          <div class="insight-card">
             <div class="reset-step-title"><span class="reset-step-number">1</span><span>Regla de los 10 Pasos</span></div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">
+            <p>
               Tienes permitido lamentarte únicamente durante 10 pasos tras el golpe. Al llegar al paso 11, el tiro ya es pasado inalterable.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+          <div class="insight-card">
             <div class="reset-step-title"><span class="reset-step-number">2</span><span>Guardar el Palo con Intención</span></div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">
+            <p>
               Al introducir el palo en la bolsa, imagina que guardas allí cualquier pensamiento negativo o frustración.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
+          <div class="insight-card">
             <div class="reset-step-title"><span class="reset-step-number">3</span><span>Re-Enfocar en la Oportunidad</span></div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">
+            <p>
               En lugar de pensar en el hoyo arruinado, míralo como un desafío emocionante para entrenar tu capacidad de recuperación (Scrambling).
             </p>
           </div>
