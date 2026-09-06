@@ -140,3 +140,4 @@ async function staleWhileRevalidate(request) {
 
   return cached || network;
 }
+

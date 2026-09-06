@@ -149,3 +149,4 @@ Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabas
 Después de publicar esta versión, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. Si el dispositivo contiene fichas anteriores, primero debe elegir **Revisar fichas anteriores** y confirmar su vinculación. Luego toca ☁️ y elige **Activar respaldo y sincronizar**. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
 
 No subas nombres, teléfonos, correos, códigos de activación ni claves administrativas al repositorio: GitHub Pages es público. La app usa solamente una publishable key en el navegador; las políticas RLS de PostgreSQL autorizan cada dato en el servidor.
+
