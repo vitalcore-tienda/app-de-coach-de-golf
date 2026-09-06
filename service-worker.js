@@ -6,7 +6,7 @@
  * lista, incrementá CACHE_VERSION para publicar una versión nueva.
  */
 
-const CACHE_VERSION = 'golfcoach-pro-shell-v26';
+const CACHE_VERSION = 'golfcoach-pro-shell-v27';
 const CACHE_PREFIX = 'golfcoach-pro-';
 const toScopeUrl = (path) => new URL(path, self.registration.scope).href;
 
@@ -14,24 +14,24 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css?v=26',
-  './css/components.css?v=26',
-  './js/icons.js?v=26',
-  './js/utils.js?v=26',
-  './js/database.js?v=26',
-  './js/storage.js?v=26',
-  './js/players.js?v=26',
-  './js/pwa.js?v=26',
-  './js/assessment.js?v=26',
-  './js/drills.js?v=26',
-  './js/mental.js?v=26',
-  './js/tactics.js?v=26',
-  './js/rounds.js?v=26',
-  './js/mentor.js?v=26',
-  './js/app.js?v=26',
-  './js/auth.js?v=26',
-  './js/player-portal.js?v=26',
-  './js/cloud-sync.js?v=26',
+  './css/style.css?v=27',
+  './css/components.css?v=27',
+  './js/icons.js?v=27',
+  './js/utils.js?v=27',
+  './js/database.js?v=27',
+  './js/storage.js?v=27',
+  './js/players.js?v=27',
+  './js/pwa.js?v=27',
+  './js/assessment.js?v=27',
+  './js/drills.js?v=27',
+  './js/mental.js?v=27',
+  './js/tactics.js?v=27',
+  './js/rounds.js?v=27',
+  './js/mentor.js?v=27',
+  './js/app.js?v=27',
+  './js/auth.js?v=27',
+  './js/player-portal.js?v=27',
+  './js/cloud-sync.js?v=27',
   './vendor/supabase/supabase-js-2.112.3.js',
   './assets/icons/favicon-32.png',
   './assets/icons/apple-touch-icon.png',
