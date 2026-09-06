@@ -272,4 +272,3 @@ class GolfUI {
 }
 
 window.GolfUI = GolfUI;
-

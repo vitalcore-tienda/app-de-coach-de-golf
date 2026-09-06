@@ -545,4 +545,3 @@ class PlayerEngine {
 }
 
 window.PlayerEngine = PlayerEngine;
-
