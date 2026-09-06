@@ -248,9 +248,10 @@ class RoundsEngine {
     });
 
     const pathD = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+    const accessibleSummary = scores.map((score, index) => `ronda ${index + 1}: ${score} golpes`).join(', ');
 
     return `
-      <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;">
+      <svg viewBox="0 0 ${width} ${height}" style="width: 100%; height: 100%;" role="img" aria-label="Evolución de score. ${accessibleSummary}">
         <line x1="${padding}" y1="${padding}" x2="${width - padding}" y2="${padding}" stroke="rgba(255,255,255,0.06)" />
         <line x1="${padding}" y1="${height / 2}" x2="${width - padding}" y2="${height / 2}" stroke="rgba(255,255,255,0.06)" />
         <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="rgba(255,255,255,0.06)" />
@@ -374,7 +375,7 @@ class RoundsEngine {
               <span id="round-progress-label">0 de 18 hoyos</span>
               <strong id="round-progress-score">Sin score</strong>
             </div>
-            <div class="round-progress-track" aria-hidden="true"><span id="round-progress-fill"></span></div>
+            <div class="round-progress-track" id="round-progress-track" role="progressbar" aria-label="Hoyos completados" aria-valuemin="0" aria-valuemax="18" aria-valuenow="0"><span id="round-progress-fill" aria-hidden="true"></span></div>
             <div class="round-progress-meta">
               <span id="round-progress-putts">0 putts</span>
               <span id="round-progress-status">Empezá por el hoyo 1</span>
@@ -478,37 +479,37 @@ class RoundsEngine {
         <div class="quick-score-row" aria-label="Cargar golpes rápidamente">
           <span>Score rápido</span>
           <div>
-            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, -1)">−1</button>
-            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 0)">Par</button>
-            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 1)">+1</button>
-            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 2)">+2</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, -1)" aria-label="Hoyo ${h.hole}: un golpe bajo par">−1</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 0)" aria-label="Hoyo ${h.hole}: par">Par</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 1)" aria-label="Hoyo ${h.hole}: un golpe sobre par">+1</button>
+            <button type="button" onclick="RoundsEngine.setQuickScore(${idx}, 2)" aria-label="Hoyo ${h.hole}: dos golpes sobre par">+2</button>
           </div>
         </div>
 
         <div class="hole-stepper-grid">
-          <div class="hole-stepper-field">
-            <label class="form-label">Golpes</label>
+          <div class="hole-stepper-field" role="group" aria-labelledby="stepper-strokes-label-${idx}">
+            <span class="form-label" id="stepper-strokes-label-${idx}">Golpes</span>
             <div class="stepper-control">
               <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', -1)" aria-label="Restar golpe">−</button>
-              <span class="stepper-value" id="stepper-strokes-${idx}">${h.strokes ?? '—'}</span>
+              <span class="stepper-value" id="stepper-strokes-${idx}" role="status" aria-live="polite" aria-label="Golpes actuales">${h.strokes ?? '—'}</span>
               <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'strokes', 1)" aria-label="Sumar golpe">+</button>
             </div>
           </div>
 
-          <div class="hole-stepper-field">
-            <label class="form-label">Putts</label>
+          <div class="hole-stepper-field" role="group" aria-labelledby="stepper-putts-label-${idx}">
+            <span class="form-label" id="stepper-putts-label-${idx}">Putts</span>
             <div class="stepper-control">
               <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', -1)" aria-label="Restar putt">−</button>
-              <span class="stepper-value" id="stepper-putts-${idx}">${h.putts ?? '—'}</span>
+              <span class="stepper-value" id="stepper-putts-${idx}" role="status" aria-live="polite" aria-label="Putts actuales">${h.putts ?? '—'}</span>
               <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'putts', 1)" aria-label="Sumar putt">+</button>
             </div>
           </div>
 
-          <div class="hole-stepper-field hole-stepper-penalties">
-            <label class="form-label">Penalidades</label>
+          <div class="hole-stepper-field hole-stepper-penalties" role="group" aria-labelledby="stepper-penalty-label-${idx}">
+            <span class="form-label" id="stepper-penalty-label-${idx}">Penalidades</span>
             <div class="stepper-control">
               <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', -1)" aria-label="Restar penalidad">−</button>
-              <span class="stepper-value" id="stepper-penalty-${idx}">${h.penalty || 0}</span>
+              <span class="stepper-value" id="stepper-penalty-${idx}" role="status" aria-live="polite" aria-label="Penalidades actuales">${h.penalty || 0}</span>
               <button type="button" class="stepper-btn" onclick="RoundsEngine.adjustStepper(${idx}, 'penalty', 1)" aria-label="Sumar penalidad">+</button>
             </div>
           </div>
@@ -551,7 +552,7 @@ class RoundsEngine {
     RoundsEngine.syncSetupSummary();
     if (setup) setup.open = false;
     GolfForm.setStatus(status);
-    document.getElementById('round-score-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('round-score-section')?.scrollIntoView({ behavior: GolfA11y.scrollBehavior(), block: 'start' });
   }
 
   static syncSetupSummary() {
@@ -599,11 +600,11 @@ class RoundsEngine {
     const nextIndex = RoundsEngine.activeMobileHole + 1;
     if (nextIndex < RoundsEngine.holeData.length) {
       RoundsEngine.selectHole(nextIndex);
-      document.querySelector('.mobile-hole-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      document.querySelector('.mobile-hole-card')?.scrollIntoView({ behavior: GolfA11y.scrollBehavior(), block: 'center' });
       return;
     }
     GolfForm.setStatus('round-save-status', 'Scorecard completo. Revisá las notas y guardá la ronda.', 'success');
-    document.getElementById('round-notes-input')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    document.getElementById('round-notes-input')?.scrollIntoView({ behavior: GolfA11y.scrollBehavior(), block: 'center' });
   }
 
   static hasRoundEntryChanges() {
@@ -724,12 +725,18 @@ class RoundsEngine {
     const progressScore = document.getElementById('round-progress-score');
     const progressPutts = document.getElementById('round-progress-putts');
     const progressStatus = document.getElementById('round-progress-status');
+    const progressTrack = document.getElementById('round-progress-track');
     const progressFill = document.getElementById('round-progress-fill');
     const nextIncomplete = RoundsEngine.holeData.findIndex((hole) => !hole.completed);
     if (progressLabel) progressLabel.textContent = `${completedCount} de ${totalHoles} hoyos`;
     if (progressScore) progressScore.textContent = completedCount ? `${totScore} golpes · ${diffStr}` : 'Sin score';
     if (progressPutts) progressPutts.textContent = `${totPutts} putt${totPutts === 1 ? '' : 's'}`;
     if (progressStatus) progressStatus.textContent = nextIncomplete >= 0 ? `Próximo: hoyo ${nextIncomplete + 1}` : 'Scorecard completo';
+    if (progressTrack) {
+      progressTrack.setAttribute('aria-valuemax', String(totalHoles));
+      progressTrack.setAttribute('aria-valuenow', String(completedCount));
+      progressTrack.setAttribute('aria-valuetext', `${completedCount} de ${totalHoles} hoyos completados`);
+    }
     if (progressFill) progressFill.style.width = `${totalHoles ? (completedCount / totalHoles) * 100 : 0}%`;
 
     const saveButton = document.getElementById('round-save-btn');

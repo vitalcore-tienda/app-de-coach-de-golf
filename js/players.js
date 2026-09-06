@@ -407,11 +407,11 @@ class PlayerEngine {
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
       <div class="grid-2">
-        <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-control" id="handicap-date-input" value="${today}"></div>
-        <div class="form-group"><label class="form-label">Índice de hándicap</label><input type="number" min="-10" max="54" step="0.1" class="form-control" id="handicap-value-input" value="${PlayerEngine.escapeHTML(profile.handicap)}"></div>
+        <div class="form-group"><label class="form-label" for="handicap-date-input">Fecha</label><input type="date" class="form-control" id="handicap-date-input" value="${today}"></div>
+        <div class="form-group"><label class="form-label" for="handicap-value-input">Índice de hándicap</label><input type="number" min="-10" max="54" step="0.1" class="form-control" id="handicap-value-input" value="${PlayerEngine.escapeHTML(profile.handicap)}"></div>
       </div>
-      <div class="form-group"><label class="form-label">Origen</label><select class="form-control" id="handicap-source-input"><option>Manual</option><option>Oficial</option><option>Estimado por coach</option></select></div>
-      <div class="form-group"><label class="form-label">Notas</label><input class="form-control" id="handicap-notes-input" placeholder="Ej.: actualización federativa de agosto"></div>
+      <div class="form-group"><label class="form-label" for="handicap-source-input">Origen</label><select class="form-control" id="handicap-source-input"><option>Manual</option><option>Oficial</option><option>Estimado por coach</option></select></div>
+      <div class="form-group"><label class="form-label" for="handicap-notes-input">Notas</label><input class="form-control" id="handicap-notes-input" placeholder="Ej.: actualización federativa de agosto"></div>
       <div class="form-status" id="handicap-save-status" role="status" aria-live="polite"></div>
       <button class="btn btn-primary" id="handicap-save-btn" style="width:100%; min-height:48px; margin-top:0.4rem;" onclick="PlayerEngine.saveHandicapRecord()">Guardar hándicap</button>
     `;

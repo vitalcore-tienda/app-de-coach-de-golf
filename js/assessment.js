@@ -332,9 +332,10 @@ class AssessmentEngine {
       const c = getCoord(p.val, idx);
       return `${c.x},${c.y}`;
     }).join(' ');
+    const accessibleSummary = pillars.map((pillar) => `${pillar.label}: ${pillar.val} por ciento`).join(', ');
 
     return `
-      <svg viewBox="0 0 ${size} ${size}" style="width: 100%; height: 100%;">
+      <svg viewBox="0 0 ${size} ${size}" style="width: 100%; height: 100%;" role="img" aria-label="Radar de habilidades. ${accessibleSummary}">
         ${gridCircles}
         ${axisLines}
         <polygon points="${pointsStr}" fill="rgba(212, 175, 55, 0.25)" stroke="var(--gold-400)" stroke-width="2.5" />
@@ -441,7 +442,7 @@ class AssessmentEngine {
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
 
-      <div class="progress-bar-container" style="margin-bottom: 1.75rem;">
+      <div class="progress-bar-container" style="margin-bottom: 1.75rem;" role="progressbar" aria-label="Progreso del diagnóstico" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPct}">
         <div class="progress-bar-fill" style="width: ${progressPct}%;"></div>
       </div>
 
@@ -451,10 +452,10 @@ class AssessmentEngine {
 
       <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 2rem;">
         ${q.options.map((opt, idx) => `
-          <div class="routine-step" onclick="window.currentQuizInstance.selectAnswer(${opt.score})" style="cursor: pointer;">
-            <div class="step-num">${String.fromCharCode(65 + idx)}</div>
-            <div class="step-text" style="font-size: 0.95rem;">${opt.text}</div>
-          </div>
+          <button class="routine-step" type="button" onclick="window.currentQuizInstance.selectAnswer(${opt.score})">
+            <span class="step-num" aria-hidden="true">${String.fromCharCode(65 + idx)}</span>
+            <span class="step-text" style="font-size: 0.95rem;">${opt.text}</span>
+          </button>
         `).join('')}
       </div>
 

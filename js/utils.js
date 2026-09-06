@@ -15,6 +15,57 @@ class GolfUtils {
 window.GolfUtils = GolfUtils;
 
 /**
+ * Ayudas de accesibilidad compartidas por la SPA y sus ventanas.
+ */
+class GolfA11y {
+  static prefersReducedMotion() {
+    return Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  }
+
+  static scrollBehavior() {
+    return GolfA11y.prefersReducedMotion() ? 'auto' : 'smooth';
+  }
+
+  static announce(message, targetId = 'route-announcer') {
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    target.textContent = '';
+    window.requestAnimationFrame(() => {
+      target.textContent = String(message || '');
+    });
+  }
+
+  static focusable(container) {
+    if (!container) return [];
+    return [...container.querySelectorAll([
+      'a[href]', 'button:not([disabled])', 'input:not([disabled]):not([type="hidden"])',
+      'select:not([disabled])', 'textarea:not([disabled])', '[tabindex]:not([tabindex="-1"])'
+    ].join(','))].filter((element) => !element.hidden && element.getClientRects().length > 0);
+  }
+
+  static trapFocus(event, container) {
+    if (event.key !== 'Tab' || !container) return;
+    const focusable = GolfA11y.focusable(container);
+    if (!focusable.length) {
+      event.preventDefault();
+      container.focus?.();
+      return;
+    }
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+}
+
+window.GolfA11y = GolfA11y;
+
+/**
  * Comportamiento compartido para los formularios de las ventanas de la app.
  * Mantiene la validación cerca del campo y evita que cada módulo implemente
  * estados de error y carga de una manera diferente.
@@ -118,7 +169,7 @@ class GolfForm {
     const invalid = controls.filter((control) => !GolfForm.validateField(control, { force: true }));
     if (invalid.length) {
       invalid[0].focus({ preventScroll: true });
-      invalid[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+      invalid[0].scrollIntoView({ behavior: GolfA11y.scrollBehavior(), block: 'center' });
     }
     return invalid.length === 0;
   }

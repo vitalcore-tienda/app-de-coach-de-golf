@@ -178,13 +178,13 @@ class DrillsEngine {
       </div>
 
       <!-- Category Filter Pills -->
-      <div class="filter-bar">
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'all' ? 'active' : ''}" onclick="DrillsEngine.setFilter('all')">Todos</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'swing' ? 'active' : ''}" onclick="DrillsEngine.setFilter('swing')">🏌️ Swing & Maderas</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'putting' ? 'active' : ''}" onclick="DrillsEngine.setFilter('putting')">⛳ Putting</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'chipping' ? 'active' : ''}" onclick="DrillsEngine.setFilter('chipping')">🎯 Chipping & Wedges</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'bunker' ? 'active' : ''}" onclick="DrillsEngine.setFilter('bunker')">🏖️ Bunker</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'fitness' ? 'active' : ''}" onclick="DrillsEngine.setFilter('fitness')">💪 Físico & Movilidad</button>
+      <div class="filter-bar" role="group" aria-label="Filtrar planes por categoría">
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'all' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'all'}" onclick="DrillsEngine.setFilter('all')">Todos</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'swing' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'swing'}" onclick="DrillsEngine.setFilter('swing')">🏌️ Swing & Maderas</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'putting' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'putting'}" onclick="DrillsEngine.setFilter('putting')">⛳ Putting</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'chipping' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'chipping'}" onclick="DrillsEngine.setFilter('chipping')">🎯 Chipping & Wedges</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'bunker' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'bunker'}" onclick="DrillsEngine.setFilter('bunker')">🏖️ Bunker</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'fitness' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'fitness'}" onclick="DrillsEngine.setFilter('fitness')">💪 Físico & Movilidad</button>
       </div>
 
       <!-- Drills Grid -->

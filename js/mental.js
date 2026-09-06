@@ -73,12 +73,12 @@ class MentalEngine {
             </div>
           </div>
 
-          <div class="breathing-instruction" id="breathing-instruction-text">
+          <div class="breathing-instruction" id="breathing-instruction-text" role="status" aria-live="polite" aria-atomic="true">
             Presiona Iniciar para comenzar el ciclo
           </div>
 
           <div style="margin-top: 1.5rem;">
-            <button class="btn btn-primary" id="breathing-toggle-btn" onclick="MentalEngine.toggleBreathing()">
+            <button class="btn btn-primary" type="button" id="breathing-toggle-btn" onclick="MentalEngine.toggleBreathing()" aria-pressed="false">
               ▶ Iniciar Respiración Guiada
             </button>
           </div>
@@ -100,13 +100,13 @@ class MentalEngine {
 
           <div class="routine-list" id="pre-shot-routine-list">
             ${MentalEngine.defaultRoutineSteps.map((step, idx) => `
-              <div class="routine-step" id="routine-step-${idx}" onclick="MentalEngine.toggleStep(${idx})">
-                <div class="step-num">${idx + 1}</div>
-                <div>
-                  <div class="step-text">${step.title}</div>
-                  <div class="step-subtext">${step.desc}</div>
-                </div>
-              </div>
+              <button class="routine-step" type="button" id="routine-step-${idx}" onclick="MentalEngine.toggleStep(${idx})" aria-pressed="false">
+                <span class="step-num" aria-hidden="true">${idx + 1}</span>
+                <span>
+                  <span class="step-text">${step.title}</span>
+                  <span class="step-subtext">${step.desc}</span>
+                </span>
+              </button>
             `).join('')}
           </div>
         </div>
@@ -162,7 +162,10 @@ class MentalEngine {
     MentalEngine.breathingSec = 4;
 
     const btn = document.getElementById('breathing-toggle-btn');
-    if (btn) btn.innerHTML = '⏹ Detener';
+    if (btn) {
+      btn.innerHTML = '⏹ Detener';
+      btn.setAttribute('aria-pressed', 'true');
+    }
 
     MentalEngine.updateBreathingState();
 
@@ -188,7 +191,10 @@ class MentalEngine {
     const text = document.getElementById('breathing-instruction-text');
     const countEl = document.getElementById('breathing-timer-count');
 
-    if (btn) btn.innerHTML = '▶ Iniciar Respiración Guiada';
+    if (btn) {
+      btn.innerHTML = '▶ Iniciar Respiración Guiada';
+      btn.setAttribute('aria-pressed', 'false');
+    }
     if (bubble) bubble.className = 'breathing-bubble';
     if (text) text.innerText = 'Ciclo pausado';
     if (countEl) countEl.innerText = '4';
@@ -223,6 +229,7 @@ class MentalEngine {
     const el = document.getElementById(`routine-step-${idx}`);
     if (el) {
       el.classList.toggle('completed');
+      el.setAttribute('aria-pressed', String(el.classList.contains('completed')));
     }
   }
 }

@@ -10,6 +10,8 @@ class App {
   static modalCleanup = null;
   static claimingLegacyData = false;
   static startingDemo = false;
+  static modalReturnFocus = null;
+  static drawerReturnFocus = null;
 
   static async init() {
     // 1. Preparar la base local sin exponer fichas hasta conocer la identidad.
@@ -38,6 +40,9 @@ class App {
         }
       });
     });
+    document.querySelectorAll('.view-panel').forEach((panel) => {
+      panel.setAttribute('aria-hidden', String(!panel.classList.contains('active')));
+    });
 
     // 4. Render Initial Dashboard View & Player Profile
     App.updateProfileDisplay();
@@ -64,10 +69,16 @@ class App {
       App.clearPrivateViewContent();
       App.closeModal();
       App.currentView = 'dashboard';
-      document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
-      document.getElementById('dashboard-panel')?.classList.add('active');
+      document.querySelectorAll('.view-panel').forEach((panel) => {
+        panel.classList.remove('active');
+        panel.setAttribute('aria-hidden', 'true');
+      });
+      const dashboardPanel = document.getElementById('dashboard-panel');
+      dashboardPanel?.classList.add('active');
+      dashboardPanel?.setAttribute('aria-hidden', 'false');
       const title = document.getElementById('current-page-title');
       if (title) title.textContent = 'Acceso seguro';
+      GolfA11y.announce('Sección Acceso seguro');
       App.renderDashboard();
       return;
     }
@@ -260,8 +271,10 @@ class App {
     document.querySelectorAll('.sidebar .nav-item').forEach(item => {
       if (item.getAttribute('data-view') === viewId) {
         item.classList.add('active');
+        item.setAttribute('aria-current', 'page');
       } else {
         item.classList.remove('active');
+        item.removeAttribute('aria-current');
       }
     });
 
@@ -279,11 +292,13 @@ class App {
     // 3. Update View Panels
     document.querySelectorAll('.view-panel').forEach(panel => {
       panel.classList.remove('active');
+      panel.setAttribute('aria-hidden', 'true');
     });
 
     const activePanel = document.getElementById(`${viewId}-panel`);
     if (activePanel) {
       activePanel.classList.add('active');
+      activePanel.setAttribute('aria-hidden', 'false');
     }
 
     // 4. Update Topbar Title
@@ -304,6 +319,7 @@ class App {
     if (titleEl) {
       titleEl.innerText = titles[viewId] || 'GolfCoach Pro';
     }
+    GolfA11y.announce(`Sección ${titles[viewId] || 'GolfCoach Pro'}`);
 
     // 5. Trigger Module Renderers
     if (viewId === 'dashboard') App.renderDashboard();
@@ -316,15 +332,26 @@ class App {
     if (viewId === 'rounds' && window.RoundsEngine) RoundsEngine.renderRoundsView();
     if (viewId === 'mentor' && window.MentorEngine) MentorEngine.renderMentorView();
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: GolfA11y.scrollBehavior() });
   }
 
   static toggleMobileDrawer() {
     App.closeMobileTopbarActions();
     const drawer = document.getElementById('mobile-drawer-overlay');
-    if (drawer) {
-      drawer.classList.toggle('active');
+    if (!drawer) return;
+    if (drawer.classList.contains('active')) {
+      App.closeMobileDrawer();
+      return;
     }
+    App.drawerReturnFocus = document.activeElement;
+    drawer.classList.add('active');
+    drawer.setAttribute('aria-hidden', 'false');
+    document.querySelectorAll('#mobile-more-btn, #mobile-drawer-toggle-btn').forEach((button) => {
+      button.setAttribute('aria-expanded', 'true');
+    });
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = true;
+    window.requestAnimationFrame(() => drawer.querySelector('.modal-close')?.focus());
   }
 
   static closeMobileDrawer(event) {
@@ -332,9 +359,17 @@ class App {
       return;
     }
     const drawer = document.getElementById('mobile-drawer-overlay');
-    if (drawer) {
-      drawer.classList.remove('active');
-    }
+    if (!drawer) return;
+    const wasOpen = drawer.classList.contains('active');
+    drawer.classList.remove('active');
+    drawer.setAttribute('aria-hidden', 'true');
+    document.querySelectorAll('#mobile-more-btn, #mobile-drawer-toggle-btn').forEach((button) => {
+      button.setAttribute('aria-expanded', 'false');
+    });
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = false;
+    if (wasOpen && App.drawerReturnFocus?.isConnected) App.drawerReturnFocus.focus();
+    App.drawerReturnFocus = null;
   }
 
   static toggleMobileTopbarActions() {
@@ -416,7 +451,7 @@ class App {
         </div>
       ` : ''}
       <!-- Coach workspace hero -->
-      <div class="card card-gold-glow view-hero" style="background: radial-gradient(circle at 10% 20%, rgba(24, 92, 59, 0.4) 0%, rgba(18, 25, 21, 0.95) 80%);">
+      <div class="card card-gold-glow view-hero dashboard-coach-hero">
         <div class="view-hero-row">
           <div class="view-heading-copy">
             <div class="view-kicker-row">
@@ -554,7 +589,7 @@ class App {
                     <span style="font-weight: 600;">${App.escapeHTML(g.title || 'Meta sin título')}</span>
                     <span style="color: var(--gold-400); font-weight: 700;">${progress}%</span>
                   </div>
-                  <div class="progress-bar-container">
+                  <div class="progress-bar-container" role="progressbar" aria-label="Progreso de la meta ${App.escapeHTML(g.title || 'Meta sin título')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}">
                     <div class="progress-bar-fill" style="width: ${progress}%;"></div>
                   </div>
                 </div>
@@ -736,67 +771,67 @@ class App {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Nombre Completo</label>
+        <label class="form-label" for="profile-name-input">Nombre Completo</label>
         <input type="text" class="form-control" id="profile-name-input" value="${App.escapeHTML(profile.name)}">
       </div>
 
       <div class="grid-2">
         <div class="form-group">
-          <label class="form-label">Email</label>
+          <label class="form-label" for="profile-email-input">Email</label>
           <input type="email" class="form-control" id="profile-email-input" value="${App.escapeHTML(profile.email || '')}" placeholder="nombre@email.com">
         </div>
         <div class="form-group">
-          <label class="form-label">Teléfono</label>
+          <label class="form-label" for="profile-phone-input">Teléfono</label>
           <input type="text" class="form-control" id="profile-phone-input" value="${App.escapeHTML(profile.phone || '')}" placeholder="Contacto">
         </div>
       </div>
 
       <div class="grid-3">
         <div class="form-group">
-          <label class="form-label">Hándicap Actual</label>
+          <label class="form-label" for="profile-hcp-input">Hándicap Actual</label>
           <input type="number" step="0.1" class="form-control" id="profile-hcp-input" value="${App.safeNumber(profile.handicap, 0)}">
         </div>
         <div class="form-group">
-          <label class="form-label">Hándicap Objetivo</label>
+          <label class="form-label" for="profile-target-hcp-input">Hándicap Objetivo</label>
           <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${profile.targetHandicap ?? ''}">
         </div>
         <div class="form-group">
-          <label class="form-label">Licencia Federativa</label>
+          <label class="form-label" for="profile-license-input">Licencia Federativa</label>
           <input type="text" class="form-control" id="profile-license-input" value="${App.escapeHTML(profile.federationLicense || '')}" placeholder="Opcional">
         </div>
       </div>
 
       <div class="grid-2">
         <div class="form-group">
-          <label class="form-label">Club Principal</label>
+          <label class="form-label" for="profile-club-input">Club Principal</label>
           <input type="text" class="form-control" id="profile-club-input" value="${App.escapeHTML(profile.homeClub || '')}">
         </div>
         <div class="form-group">
-          <label class="form-label">Carry Driver (m)</label>
+          <label class="form-label" for="profile-driver-input">Carry Driver (m)</label>
           <input type="number" class="form-control" id="profile-driver-input" value="${profile.driverDistanceAvg ?? ''}">
         </div>
       </div>
 
       <div class="grid-3">
         <div class="form-group">
-          <label class="form-label">Mano Dominante</label>
+          <label class="form-label" for="profile-hand-input">Mano Dominante</label>
           <select class="form-control" id="profile-hand-input">
             <option ${profile.dominantHand === 'Diestro' ? 'selected' : ''}>Diestro</option>
             <option ${profile.dominantHand === 'Zurdo' ? 'selected' : ''}>Zurdo</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Años de Experiencia</label>
+          <label class="form-label" for="profile-experience-input">Años de Experiencia</label>
           <input type="number" min="0" class="form-control" id="profile-experience-input" value="${App.safeNumber(profile.experienceYears, 0)}">
         </div>
         <div class="form-group">
-          <label class="form-label">Fecha de Nacimiento</label>
+          <label class="form-label" for="profile-birthdate-input">Fecha de Nacimiento</label>
           <input type="date" class="form-control" id="profile-birthdate-input" value="${App.escapeHTML(profile.birthDate || '')}">
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Categoría / Nivel</label>
+        <label class="form-label" for="profile-category-input">Categoría / Nivel</label>
         <input type="text" class="form-control" id="profile-category-input" value="${App.escapeHTML(profile.playerCategory || '')}" placeholder="Ej.: Amateur competitivo">
       </div>
 
@@ -879,16 +914,48 @@ class App {
     const modal = document.getElementById('global-modal');
     const modalContent = document.getElementById('global-modal-content');
     if (modalContent && window.GolfForm) GolfForm.enhance(modalContent);
-    if (modal) modal.classList.add('active');
+    if (!modal || !modalContent) return;
+    const wasOpen = modal.classList.contains('active');
+    if (!wasOpen) App.modalReturnFocus = document.activeElement;
+    modalContent.querySelectorAll('button:not([type])').forEach((button) => { button.type = 'button'; });
+    modalContent.querySelectorAll('.modal-close').forEach((button) => {
+      if (!button.getAttribute('aria-label')) button.setAttribute('aria-label', 'Cerrar ventana');
+    });
+    const heading = modalContent.querySelector('h1, h2, h3');
+    if (heading) {
+      if (!heading.id) heading.id = `modal-title-${Date.now()}`;
+      modalContent.setAttribute('aria-labelledby', heading.id);
+      modalContent.removeAttribute('aria-label');
+    } else {
+      modalContent.removeAttribute('aria-labelledby');
+      modalContent.setAttribute('aria-label', 'Ventana de GolfCoach');
+    }
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = true;
+    const drawer = document.getElementById('mobile-drawer-overlay');
+    if (drawer) drawer.inert = true;
+    window.requestAnimationFrame(() => modalContent.focus({ preventScroll: true }));
   }
 
   static closeModal() {
     const modal = document.getElementById('global-modal');
-    if (modal) modal.classList.remove('active');
+    const wasOpen = modal?.classList.contains('active');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = false;
+    const drawer = document.getElementById('mobile-drawer-overlay');
+    if (drawer) drawer.inert = false;
     document.getElementById('global-modal-content')?.classList.remove('form-modal');
     const cleanup = App.modalCleanup;
     App.modalCleanup = null;
     if (typeof cleanup === 'function') cleanup();
+    if (wasOpen && App.modalReturnFocus?.isConnected) App.modalReturnFocus.focus();
+    App.modalReturnFocus = null;
   }
 
   static requestModalClose() {
@@ -974,6 +1041,9 @@ class App {
 window.App = App;
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelector('.skip-link')?.addEventListener('click', () => {
+    window.requestAnimationFrame(() => document.getElementById('main-content')?.focus({ preventScroll: true }));
+  });
   App.init().catch((error) => {
     console.error('No se pudo iniciar GolfCoach:', error);
     document.body.classList.remove('auth-resolving');
@@ -989,5 +1059,27 @@ document.addEventListener('click', (event) => {
 });
 
 document.addEventListener('keydown', (event) => {
+  const modal = document.getElementById('global-modal');
+  if (modal?.classList.contains('active')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      App.requestModalClose();
+    } else {
+      GolfA11y.trapFocus(event, document.getElementById('global-modal-content'));
+    }
+    return;
+  }
+
+  const drawer = document.getElementById('mobile-drawer-overlay');
+  if (drawer?.classList.contains('active')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      App.closeMobileDrawer();
+    } else {
+      GolfA11y.trapFocus(event, drawer.querySelector('.mobile-drawer-content'));
+    }
+    return;
+  }
+
   if (event.key === 'Escape') App.closeMobileTopbarActions({ restoreFocus: true });
 });

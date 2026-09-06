@@ -21,6 +21,7 @@
   --gold-600: #b28a2c;
   --gold-500: #d4af37;
   --gold-400: #e2c45e;
+  --gold-fill-400: #e2c45e;
   --gold-300: #eed88c;
   --gold-200: #f7ebbe;
   --gold-100: #fdf8e6;
@@ -35,8 +36,11 @@
   
   --text-main: #f3f5f4;
   --text-muted: #94a39b;
-  --text-subtle: #627269;
+  --text-subtle: #819188;
   --text-gold: #e2c45e;
+  --focus-ring: #f7d96f;
+  --status-error-text: #f5a5a5;
+  --primary-fill-300: #62c794;
 
   /* Status Colors */
   --color-success: #10b981;
@@ -145,6 +149,12 @@ body.workspace-empty .bottom-nav-item:not([data-view="dashboard"]):not([data-vie
   background:
     radial-gradient(circle at 90% 0%, rgba(212, 175, 55, 0.16), transparent 38%),
     linear-gradient(145deg, rgba(24, 92, 59, 0.32), rgba(18, 25, 21, 0.96));
+}
+
+[data-theme="light"] .onboarding-hero {
+  background:
+    radial-gradient(circle at 90% 0%, rgba(212, 175, 55, 0.13), transparent 38%),
+    linear-gradient(145deg, rgba(216, 245, 230, 0.72), rgba(255, 255, 255, 0.98));
 }
 
 .onboarding-eyebrow {
@@ -324,7 +334,7 @@ body.workspace-empty .bottom-nav-item:not([data-view="dashboard"]):not([data-vie
 }
 
 .form-status.error {
-  color: #ef9a9a;
+  color: var(--status-error-text);
 }
 
 .empty-state-panel {
@@ -385,8 +395,13 @@ body.workspace-empty .bottom-nav-item:not([data-view="dashboard"]):not([data-vie
 
   --text-main: #0c1811;
   --text-muted: #4e6356;
-  --text-subtle: #7d9687;
-  --text-gold: #9a7218;
+  --text-subtle: #5b7063;
+  --text-gold: #76570d;
+  --gold-400: #76570d;
+  --primary-300: #17633f;
+  --primary-200: #174e35;
+  --focus-ring: #6b4e08;
+  --status-error-text: #b42318;
 
   --shadow-sm: 0 2px 10px rgba(11, 46, 28, 0.06);
   --shadow-md: 0 10px 30px rgba(11, 46, 28, 0.08);
@@ -405,6 +420,30 @@ body.workspace-empty .bottom-nav-item:not([data-view="dashboard"]):not([data-vie
 html {
   font-size: 16px;
   scroll-behavior: smooth;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 3000;
+  top: max(0.5rem, var(--sat));
+  left: max(0.5rem, var(--sal));
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--focus-ring);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-lg);
+  font-weight: 800;
+  transform: translateY(-180%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
 }
 
 body {
@@ -547,6 +586,12 @@ a:hover {
   -webkit-text-fill-color: transparent;
 }
 
+[data-theme="light"] .brand-info h2 {
+  background: linear-gradient(90deg, var(--text-main), var(--text-gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
 .brand-info span {
   font-size: var(--text-xs);
   color: var(--text-subtle);
@@ -567,6 +612,7 @@ a:hover {
 }
 
 .nav-item {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -580,6 +626,9 @@ a:hover {
   transition: all var(--transition-fast);
   border: 1px solid transparent;
   user-select: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
 }
 
 .nav-item:active, .nav-item:hover {
@@ -636,16 +685,26 @@ a:hover {
 }
 
 .player-mini-card {
+  width: 100%;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 0.85rem;
+  padding: 0.2rem;
+  border: 0;
+  border-radius: var(--radius-md);
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .player-avatar {
   width: 40px;
   height: 40px;
   border-radius: var(--radius-full);
-  background: linear-gradient(135deg, var(--gold-600), var(--gold-400));
+  background: linear-gradient(135deg, var(--gold-600), var(--gold-fill-400));
   color: #0c1811;
   font-weight: 800;
   display: flex;
@@ -655,7 +714,13 @@ a:hover {
   border: 2px solid rgba(255, 255, 255, 0.2);
 }
 
-.player-mini-info h4 {
+.player-mini-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.player-mini-info .player-mini-name {
   font-size: var(--text-base);
   font-weight: 600;
   white-space: nowrap;
@@ -663,9 +728,9 @@ a:hover {
   text-overflow: ellipsis;
 }
 
-.player-mini-info p {
+.player-mini-info .player-mini-meta {
   font-size: var(--text-xs);
-  color: var(--gold-400);
+  color: var(--text-gold);
   font-weight: 500;
 }
 
@@ -719,14 +784,14 @@ a:hover {
 }
 
 .demo-mode-indicator {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0.35rem 0.65rem;
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
   flex: 0 0 auto;
   color: #171307;
-  background: linear-gradient(135deg, var(--gold-400), var(--gold-600));
+  background: linear-gradient(135deg, var(--gold-fill-400), var(--gold-600));
   border: 1px solid rgba(255, 225, 118, 0.72);
   border-radius: var(--radius-full);
   box-shadow: 0 5px 18px rgba(212, 175, 55, 0.2);
@@ -748,9 +813,9 @@ a:hover {
 }
 
 .mobile-topbar-actions-btn {
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
   align-items: center;
   justify-content: center;
   color: var(--text-main);
@@ -768,8 +833,8 @@ a:hover {
 
 .btn-icon {
   position: relative;
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-md);
   background: var(--bg-surface-elevated);
   border: 1px solid var(--border-subtle);
@@ -806,7 +871,7 @@ a:hover {
 
 .workspace-context-control {
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -825,7 +890,8 @@ a:hover {
 .workspace-context-control:focus-visible {
   background: var(--bg-surface-elevated);
   border-color: var(--border-strong);
-  outline: none;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .workspace-account-context {
@@ -1158,7 +1224,7 @@ a:hover {
   }
 
   .demo-mode-indicator {
-    min-height: 30px;
+    min-height: 44px;
     padding: 0.3rem 0.5rem;
     font-size: 0.66rem;
   }

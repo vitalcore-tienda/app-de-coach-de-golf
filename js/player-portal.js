@@ -47,6 +47,7 @@ class PlayerPortal {
     const titles = { today: 'Hoy', plan: 'Mi plan', progress: 'Progreso', messages: 'Mensajes' };
     const title = document.getElementById('current-page-title');
     if (title && PlayerPortal.active) title.textContent = titles[sectionId];
+    if (PlayerPortal.active) GolfA11y.announce(`Portal del golfista. Sección ${titles[sectionId]}`);
   }
 
   static navigateToSection(sectionId) {
@@ -55,7 +56,7 @@ class PlayerPortal {
     if (!target) return false;
     PlayerPortal.updatePlayerNavigation(sectionId);
     target.scrollIntoView({
-      behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ? 'auto' : 'smooth',
+      behavior: GolfA11y.scrollBehavior(),
       block: 'start'
     });
     return true;
@@ -89,8 +90,8 @@ class PlayerPortal {
   }
 
   static closeCoachOverlays() {
-    document.getElementById('global-modal')?.classList.remove('active');
-    document.getElementById('mobile-drawer-overlay')?.classList.remove('active');
+    window.App?.closeModal?.();
+    window.App?.closeMobileDrawer?.();
   }
 
   static async onAuthStateChanged() {
@@ -120,10 +121,16 @@ class PlayerPortal {
     PlayerPortal.setPlayerNavigationVisible(false);
     PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
-    document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
-    document.getElementById('player-portal-panel')?.classList.add('active');
+    document.querySelectorAll('.view-panel').forEach((panel) => {
+      panel.classList.remove('active');
+      panel.setAttribute('aria-hidden', 'true');
+    });
+    const playerPanel = document.getElementById('player-portal-panel');
+    playerPanel?.classList.add('active');
+    playerPanel?.setAttribute('aria-hidden', 'false');
     const title = document.getElementById('current-page-title');
     if (title) title.textContent = 'Hoy';
+    GolfA11y.announce('Portal del golfista. Sección Hoy');
     PlayerPortal.renderLoading();
     PlayerPortal.load({ identityContext }).catch((error) => {
       console.warn('No se pudo preparar el portal del golfista:', error);
@@ -137,10 +144,16 @@ class PlayerPortal {
     PlayerPortal.setPlayerNavigationVisible(false);
     PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
-    document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
-    document.getElementById('player-portal-panel')?.classList.add('active');
+    document.querySelectorAll('.view-panel').forEach((panel) => {
+      panel.classList.remove('active');
+      panel.setAttribute('aria-hidden', 'true');
+    });
+    const playerPanel = document.getElementById('player-portal-panel');
+    playerPanel?.classList.add('active');
+    playerPanel?.setAttribute('aria-hidden', 'false');
     const title = document.getElementById('current-page-title');
     if (title) title.textContent = 'Verificando cuenta';
+    GolfA11y.announce('Verificando el tipo de cuenta');
     PlayerPortal.renderIdentityPending();
   }
 
@@ -172,7 +185,9 @@ class PlayerPortal {
     document.body.classList.remove('player-portal-active');
 
     if (!wasActive || !window.App) return;
-    document.getElementById('player-portal-panel')?.classList.remove('active');
+    const playerPanel = document.getElementById('player-portal-panel');
+    playerPanel?.classList.remove('active');
+    playerPanel?.setAttribute('aria-hidden', 'true');
     App.navigateTo('dashboard');
   }
 
@@ -580,10 +595,11 @@ class PlayerPortal {
     if (!goals.length) return '<div class="portal-empty-state">Las metas compartidas por tu entrenador aparecerán acá.</div>';
     return goals.slice(0, 8).map((goal) => {
       const progress = Math.max(0, Math.min(100, Number.parseInt(goal?.progress, 10) || 0));
+      const title = PlayerPortal.escapeHTML(goal?.title || 'Meta de entrenamiento');
       return `
         <div class="portal-goal-item">
-          <div class="portal-item-header"><h4>${PlayerPortal.escapeHTML(goal?.title || 'Meta de entrenamiento')}</h4><span class="badge badge-green">${progress}%</span></div>
-          <div class="progress-bar-container" style="margin-top:0.65rem;"><div class="progress-bar-fill" style="width:${progress}%;"></div></div>
+          <div class="portal-item-header"><h4>${title}</h4><span class="badge badge-green">${progress}%</span></div>
+          <div class="progress-bar-container" style="margin-top:0.65rem;" role="progressbar" aria-label="Progreso de la meta ${title}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><div class="progress-bar-fill" style="width:${progress}%;"></div></div>
           <div class="portal-item-meta"><span>${PlayerPortal.escapeHTML(goal?.category || 'General')}</span>${goal?.targetDate ? `<span>📅 ${PlayerPortal.formatDate(goal.targetDate)}</span>` : ''}</div>
         </div>
       `;

@@ -109,7 +109,7 @@ class MentorEngine {
           <span style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">${title}</span>
           <span class="badge badge-green">${progress}%</span>
         </div>
-        <div class="progress-bar-container" style="margin-bottom: 0.4rem;">
+        <div class="progress-bar-container" style="margin-bottom: 0.4rem;" role="progressbar" aria-label="Progreso de la meta ${title || 'sin título'}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}">
           <div class="progress-bar-fill" style="width: ${progress}%;"></div>
         </div>
         <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-subtle);">
@@ -184,10 +184,10 @@ class MentorEngine {
 
           <!-- Quick prompts -->
           <div style="padding: 0.5rem 1rem; background: var(--bg-surface-elevated); border-top: 1px solid var(--border-subtle); display: flex; gap: 0.4rem; overflow-x: auto;">
-            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo corregir el slice con el driver?')">🏌️ Corregir Slice</button>
-            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo evitar los tripateos?')">⛳ Eliminar Tripateos</button>
-            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo controlar los nervios en el tee del 1?')">🧘 Manejo de Nervios</button>
-            <button class="filter-pill" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo bajar mi hándicap?')">📈 Bajar Hándicap</button>
+            <button class="filter-pill" type="button" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo corregir el slice con el driver?')">🏌️ Corregir Slice</button>
+            <button class="filter-pill" type="button" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo evitar los tripateos?')">⛳ Eliminar Tripateos</button>
+            <button class="filter-pill" type="button" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo controlar los nervios en el tee del 1?')">🧘 Manejo de Nervios</button>
+            <button class="filter-pill" type="button" style="font-size: 0.75rem;" onclick="MentorEngine.sendQuickPrompt('¿Cómo bajar mi hándicap?')">📈 Bajar Hándicap</button>
           </div>
 
           <div class="chat-input-bar">
@@ -438,12 +438,12 @@ class MentorEngine {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Título / Clave del Día</label>
+        <label class="form-label" for="note-title-input">Título / Clave del Día</label>
         <input type="text" class="form-control" id="note-title-input" placeholder="ej. Sensación de soltar las manos en el finish">
       </div>
 
       <div class="form-group">
-        <label class="form-label">Detalle de la Sensación o Aprendizaje</label>
+        <label class="form-label" for="note-content-input">Detalle de la Sensación o Aprendizaje</label>
         <textarea class="form-control" id="note-content-input" rows="4" placeholder="¿Qué sentiste en el impacto? ¿Qué pensamiento te ayudó a mantener la calma?"></textarea>
       </div>
 

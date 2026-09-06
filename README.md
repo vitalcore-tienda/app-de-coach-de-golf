@@ -80,18 +80,37 @@ La interfaz usa una escala compartida de tipografía y espaciado para mantener l
 
 Mientras se abren fichas, el portal o las conversaciones, la interfaz muestra esqueletos que reservan el espacio sin inventar datos. Cada guardado confirma qué se actualizó; si falla internet o Supabase, GolfCoach diferencia el modo offline de un respaldo pendiente, conserva visible la cola cloud y permite reintentar sin confundirla con una operación completada.
 
+La interfaz incluye acceso directo para saltar al contenido, foco visible, navegación operable con teclado y áreas táctiles de al menos 44 × 44 px en los controles principales. Las ventanas y el menú celular contienen y restauran el foco, los cambios de sección y progreso se anuncian a lectores de pantalla, y las animaciones se reducen cuando el dispositivo tiene activada esa preferencia. Los colores de texto del tema oscuro y claro cumplen contraste AA sobre las superficies habituales.
+
 Si hay una sesión por correo pero Supabase todavía no puede confirmar su rol, GolfCoach mantiene ocultas las fichas locales y ofrece reintentar la verificación. La aplicación nunca interpreta una cuenta pendiente como entrenador por descarte.
 
 ## 📲 Instalarla en el celular
 
 La versión publicada en GitHub Pages es una aplicación web instalable. Abrila desde:
 
-<https://vitalcore-tienda.github.io/app-de-coach-de-golf/>
+<https://adanbrilzgolf.com.ar/>
 
 - En Android (Chrome o Edge), tocá **Instalar** dentro de la app o usá el menú de tres puntos → **Instalar aplicación** / **Agregar a pantalla principal**.
 - En iPhone/iPad, abrila en Safari → **Compartir** → **Agregar a pantalla de inicio**.
 
 El ícono queda en el teléfono y los recursos de la app quedan disponibles sin conexión. Las fichas pueden abrirse offline mientras el dispositivo conserve una sesión de entrenador válida y su rol haya sido verificado durante los últimos 30 días. El archivo `.bat` sirve para abrir una copia local en Windows, pero `file://` no permite instalarla ni activar el service worker; para esas funciones usá la URL HTTPS.
+
+### Dominio oficial
+
+El dominio canónico de producción es `adanbrilzgolf.com.ar`. El repositorio incluye el archivo `CNAME` requerido por GitHub Pages. Como NIC Argentina administra el registro pero no la zona DNS, el dominio debe delegarse a un proveedor DNS antes de activar HTTPS. La opción recomendada es Cloudflare Free:
+
+1. Agregar `adanbrilzgolf.com.ar` a Cloudflare y copiar los dos servidores de nombres asignados.
+2. En NIC Argentina/TAD, abrir el dominio, elegir **Delegar**, agregar esos dos servidores y guardar.
+3. En la zona DNS de Cloudflare, crear estos registros inicialmente como **Sólo DNS**:
+   - `A` · nombre `@` · `185.199.108.153`
+   - `A` · nombre `@` · `185.199.109.153`
+   - `A` · nombre `@` · `185.199.110.153`
+   - `A` · nombre `@` · `185.199.111.153`
+   - `CNAME` · nombre `www` · `vitalcore-tienda.github.io`
+4. En GitHub, abrir **Settings → Pages**, guardar `adanbrilzgolf.com.ar` como **Custom domain** y, cuando el certificado esté disponible, activar **Enforce HTTPS**.
+5. En Supabase, abrir **Authentication → URL Configuration**, usar `https://adanbrilzgolf.com.ar/` como **Site URL** y agregarla también como Redirect URL. Conservar temporalmente `https://vitalcore-tienda.github.io/app-de-coach-de-golf/` como redirección adicional hasta finalizar la transición.
+
+No uses un registro DNS comodín (`*`) ni agregues el nombre del repositorio al destino CNAME de `www`. La propagación de la delegación, los DNS y el certificado puede demorar varias horas.
 
 ---
 
@@ -125,7 +144,7 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 - El golfista puede marcar sus entrenamientos como iniciados o completados y responder mensajes. Las políticas RLS de Supabase limitan todas las lecturas y cambios a la ficha vinculada con su propio correo.
 - La última versión consultada del portal se guarda en el dispositivo para poder verla sin conexión. Enviar mensajes, cambiar el estado de un entrenamiento o traer datos nuevos requiere conexión.
 
-Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabase/migrations`](database/supabase/migrations): estructura, endurecimiento del primer entrenador, seguridad adicional e índices. El proyecto de Supabase debe ser exclusivo de GolfCoach; no se deben aplicar estas migraciones a otras apps de VitalCore. En Supabase Auth, Site URL y Redirect URL deben ser exactamente `https://vitalcore-tienda.github.io/app-de-coach-de-golf/`.
+Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabase/migrations`](database/supabase/migrations): estructura, endurecimiento del primer entrenador, seguridad adicional e índices. El proyecto de Supabase debe ser exclusivo de GolfCoach; no se deben aplicar estas migraciones a otras apps de VitalCore. En Supabase Auth, Site URL debe ser `https://adanbrilzgolf.com.ar/` y la misma dirección debe figurar en Redirect URLs. La dirección anterior de GitHub Pages puede conservarse temporalmente como redirección adicional durante la transición.
 
 Después de publicar esta versión, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. Si el dispositivo contiene fichas anteriores, primero debe elegir **Revisar fichas anteriores** y confirmar su vinculación. Luego toca ☁️ y elige **Activar respaldo y sincronizar**. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
 

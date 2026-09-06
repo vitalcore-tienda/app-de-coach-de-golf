@@ -47,12 +47,12 @@ class TacticsEngine {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Distancia Láser / GPS a la Bandera (metros)</label>
+            <label class="form-label" for="caddy-dist-input">Distancia Láser / GPS a la Bandera (metros)</label>
             <input type="number" class="form-control" id="caddy-dist-input" value="145" min="20" max="300" oninput="TacticsEngine.calculateRecommendation()">
           </div>
 
           <div class="form-group">
-            <label class="form-label">Condición del Viento</label>
+            <label class="form-label" for="caddy-wind-select">Condición del Viento</label>
             <select class="form-control" id="caddy-wind-select" onchange="TacticsEngine.calculateRecommendation()">
               <option value="0">Calma / Viento imperceptible</option>
               <option value="8">Viento en contra leve (+8m / +1 palo)</option>
@@ -65,7 +65,7 @@ class TacticsEngine {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Desnivel / Pendiente</label>
+            <label class="form-label" for="caddy-slope-select">Desnivel / Pendiente</label>
             <select class="form-control" id="caddy-slope-select" onchange="TacticsEngine.calculateRecommendation()">
               <option value="0">Tiro a nivel (plano)</option>
               <option value="8">Cuesta arriba leve (+8m)</option>
@@ -76,7 +76,7 @@ class TacticsEngine {
           </div>
 
           <div class="form-group">
-            <label class="form-label">Posición de la Bola (Lie)</label>
+            <label class="form-label" for="caddy-lie-select">Posición de la Bola (Lie)</label>
             <select class="form-control" id="caddy-lie-select" onchange="TacticsEngine.calculateRecommendation()">
               <option value="fairway">Fairway limpio / Tee</option>
               <option value="rough_light">Rough medio / Antegreen</option>
@@ -88,7 +88,7 @@ class TacticsEngine {
         </div>
 
         <!-- Recommendation Output Box -->
-        <div class="card caddy-recommendation-box" id="caddy-result-card">
+        <div class="card caddy-recommendation-box" id="caddy-result-card" role="status" aria-live="polite" aria-atomic="true">
           <!-- Dynamic Content Rendered by JS -->
         </div>
       </div>

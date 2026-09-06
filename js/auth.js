@@ -12,7 +12,7 @@ class AuthEngine {
   // Las publishable keys son deliberadamente públicas: RLS protege los datos.
   // Nunca agregar aquí una service_role o una clave secreta.
   static publishableKey = 'sb_publishable_rpsQPcuk_QFHef8manp3WQ_LHB3Nd4M';
-  static redirectUrl = 'https://vitalcore-tienda.github.io/app-de-coach-de-golf/';
+  static redirectUrl = 'https://adanbrilzgolf.com.ar/';
 
   static client = null;
   static user = null;
@@ -547,7 +547,7 @@ class AuthEngine {
     if (!status) return;
     status.textContent = message;
     status.style.color = type === 'error'
-      ? '#ef9a9a'
+      ? 'var(--status-error-text)'
       : type === 'success'
         ? 'var(--primary-300)'
         : 'var(--text-muted)';
