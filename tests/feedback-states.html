@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GolfCoach · Estados de carga y confirmación</title>
+  <link rel="stylesheet" href="../css/style.css?test=v25">
+  <link rel="stylesheet" href="../css/components.css?test=v25">
+</head>
+<body>
+  <pre id="result" style="position:fixed;z-index:2000;top:0;left:0;max-width:100%;max-height:9rem;overflow:auto;background:#fff;color:#111;font:12px monospace;">Ejecutando…</pre>
+  <main id="fixture" style="max-width:760px;margin:11rem auto 2rem;padding:1rem;"></main>
+  <button class="btn btn-primary" id="busy-button">Guardar ficha</button>
+  <button class="btn-icon" id="cloud-sync-btn"><span class="topbar-action-icon">☁️</span></button>
+  <div id="cloud-sync-status" class="sync-status-panel"></div>
+  <div id="toast-container" class="toast-container"></div>
+
+  <script>
+    window.STORAGE_KEYS = {
+      ASSESSMENT: 'assessment', DRILLS_PROGRESS: 'drills', MENTAL_ROUTINE: 'mental',
+      GOALS: 'goals', CHAT_HISTORY: 'chat', NOTES: 'notes'
+    };
+    window.GOLF_DATABASE = { STORES: { SETTINGS: 'settings', SYNC_OUTBOX: 'sync_outbox' } };
+    window.GolfDatabase = { isAvailable: true, get: async () => null, getAllByIndex: async () => [], put: async () => {} };
+    window.StorageManager = {
+      initialize: async () => {}, get: (_key, fallback) => fallback,
+      isWorkspaceUnlocked: () => false, isDemoPlayer: () => false,
+      getActivePlayerId: () => null, getProfile: () => ({})
+    };
+    window.AuthEngine = {
+      user: { id: 'coach-feedback-test' }, client: {}, isCoach: () => true,
+      isNetworkError: (error) => String(error?.message || '').toLowerCase().includes('failed to fetch')
+    };
+  </script>
+  <script src="../js/utils.js?test=v25"></script>
+  <script src="../js/pwa.js?test=v25"></script>
+  <script src="../js/cloud-sync.js?test=v25"></script>
+  <script src="../js/app.js?test=v25"></script>
+  <script>
+    App.init = async () => { App.ready = true; };
+
+    window.addEventListener('load', async () => {
+      const result = document.getElementById('result');
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+
+      try {
+        const fixture = document.getElementById('fixture');
+        fixture.innerHTML = GolfUI.loading('portal', 'Cargando portal del golfista…');
+        const skeleton = fixture.querySelector('.loading-skeleton');
+        assert(skeleton?.getAttribute('aria-busy') === 'true', 'El esqueleto comunica que la vista está cargando');
+        assert(skeleton?.getAttribute('role') === 'status', 'El esqueleto usa un estado accesible');
+        assert(skeleton?.querySelector('.sr-only')?.textContent.includes('Cargando portal'), 'La carga tiene una descripción para lectores de pantalla');
+        assert(skeleton?.querySelectorAll('.skeleton-card').length === 6, 'El portal reserva el espacio de indicadores y tarjetas');
+        assert(!skeleton.textContent.includes('Alejandro'), 'El esqueleto no inventa datos del golfista');
+
+        fixture.innerHTML = GolfUI.loading('thread', 'Cargando conversación…');
+        assert(fixture.querySelectorAll('.skeleton-thread .skeleton-line').length === 3, 'La conversación tiene un esqueleto específico');
+
+        const busyButton = document.getElementById('busy-button');
+        GolfForm.setBusy(busyButton, true, 'Guardando…');
+        assert(busyButton.disabled && busyButton.getAttribute('aria-busy') === 'true', 'El botón bloquea dobles envíos y comunica su actividad');
+        assert(Boolean(busyButton.querySelector('.btn-spinner')), 'El botón ocupado muestra progreso visible');
+        GolfForm.setBusy(busyButton, false);
+        assert(!busyButton.disabled && busyButton.textContent.trim() === 'Guardar ficha', 'El botón recupera su texto y disponibilidad');
+
+        App.showSaveConfirmation('Ficha guardada', 'Los cambios quedaron asociados al golfista.');
+        const successToast = document.querySelector('.toast-success');
+        assert(successToast?.getAttribute('role') === 'status', 'La confirmación de guardado es un estado no intrusivo');
+        assert(successToast?.textContent.includes('Ficha guardada'), 'La confirmación identifica qué se guardó');
+
+        App.showToast('No se pudo conectar con GolfCoach.');
+        const errorToast = document.querySelector('.toast-error');
+        assert(errorToast?.getAttribute('role') === 'alert', 'El fallo importante se anuncia como alerta');
+        assert(errorToast?.textContent.includes('No se pudo completar'), 'El fallo presenta un título claro');
+
+        const originalOnline = navigator.onLine;
+        Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+        PWAEngine.updateConnectivityStatus();
+        let networkStatus = document.getElementById('network-status');
+        assert(networkStatus.classList.contains('is-offline'), 'La falta de internet tiene un estado visual propio');
+        assert(networkStatus.textContent.includes('Estás sin conexión'), 'El aviso explica claramente que falta internet');
+        assert(networkStatus.textContent.includes('respaldo cloud esperará'), 'El aviso explica qué ocurrirá con el respaldo');
+
+        Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+        PWAEngine.reportSyncIssue('Quedaron dos fichas pendientes de respaldo.');
+        networkStatus = document.getElementById('network-status');
+        assert(networkStatus.classList.contains('is-sync-error'), 'Un fallo de sincronización se diferencia del modo offline');
+        assert(networkStatus.textContent.includes('necesita atención'), 'El fallo de sincronización indica que requiere revisión');
+        PWAEngine.clearSyncIssue({ announce: true });
+        assert(networkStatus.classList.contains('is-recovered'), 'La recuperación de la conexión se confirma visualmente');
+        assert(networkStatus.textContent.includes('Conexión recuperada'), 'La recuperación usa un mensaje inequívoco');
+        Object.defineProperty(navigator, 'onLine', { configurable: true, value: originalOnline });
+
+        assert(CloudSync.errorKind({ code: 'PGRST001' }) === 'network', 'Supabase PGRST001 se interpreta como problema de conectividad');
+        assert(CloudSync.errorKind({ code: '42501' }) === 'permission', 'Supabase 42501 se interpreta como problema de permisos');
+        assert(CloudSync.errorKind({ code: '23505' }) === 'duplicate', 'Postgres 23505 se interpreta como dato duplicado');
+        assert(CloudSync.readableError({ code: 'PGRST000' }).includes('quedó en cola'), 'El error cloud confirma que el respaldo podrá reintentarse');
+
+        CloudSync.setModalStatus('No se pudo sincronizar.', 'error');
+        assert(document.getElementById('cloud-sync-status').classList.contains('error'), 'La ventana de sincronización aplica un estado de error consistente');
+        CloudSync.getJobs = async () => [{}, {}];
+        await CloudSync.refreshButtonState();
+        const syncButton = document.getElementById('cloud-sync-btn');
+        assert(syncButton.classList.contains('has-sync-pending'), 'La barra superior señala cambios pendientes');
+        assert(syncButton.querySelector('.sync-button-badge')?.textContent === '2', 'El indicador muestra cuántos respaldos esperan');
+
+        if (new URLSearchParams(location.search).get('preview') === 'offline') {
+          clearTimeout(PWAEngine.statusTimer);
+          PWAEngine.renderConnectivityBanner({
+            mode: 'offline',
+            title: 'Estás sin conexión',
+            message: 'Las fichas y rondas locales siguen disponibles. El respaldo cloud esperará a que vuelva internet.',
+            actionLabel: 'Ver pendientes',
+            onAction: () => {}
+          });
+        }
+
+        result.dataset.status = 'passed';
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+      } catch (error) {
+        result.dataset.status = 'failed';
+        result.textContent = JSON.stringify({ passed: false, checks, error: error.message }, null, 2);
+      }
+    });
+  </script>
+</body>
+</html>

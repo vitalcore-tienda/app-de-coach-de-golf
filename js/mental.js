@@ -42,16 +42,16 @@ class MentalEngine {
     if (!container) return;
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Juego Mental & Rutina Pre-Golpe</h2>
             <p><em>"El golf es 90% mental y 10% técnica."</em> Desarrolla una mente inquebrantable bajo presión.</p>
           </div>
         </div>
       </div>
 
-      <div class="grid-2" style="margin-bottom: 2rem;">
+      <div class="grid-2 layout-section">
         <!-- Box Breathing Interactive Card -->
         <div class="card breathing-card">
           <div class="card-header" style="width: 100%;">
@@ -62,7 +62,7 @@ class MentalEngine {
             <span class="badge badge-gold">Calma Cardíaca</span>
           </div>
 
-          <p style="font-size: 0.9rem; color: var(--text-muted);">
+          <p class="content-copy">
             Técnica utilizada por jugadores de élite y atletas olímpicos para reducir pulsaciones y eliminar la tensión muscular antes del tee del 1.
           </p>
 
@@ -73,12 +73,12 @@ class MentalEngine {
             </div>
           </div>
 
-          <div class="breathing-instruction" id="breathing-instruction-text">
+          <div class="breathing-instruction" id="breathing-instruction-text" role="status" aria-live="polite" aria-atomic="true">
             Presiona Iniciar para comenzar el ciclo
           </div>
 
           <div style="margin-top: 1.5rem;">
-            <button class="btn btn-primary" id="breathing-toggle-btn" onclick="MentalEngine.toggleBreathing()">
+            <button class="btn btn-primary" type="button" id="breathing-toggle-btn" onclick="MentalEngine.toggleBreathing()" aria-pressed="false">
               ▶ Iniciar Respiración Guiada
             </button>
           </div>
@@ -94,26 +94,26 @@ class MentalEngine {
             <span class="badge badge-green">5 Pasos Clave</span>
           </div>
 
-          <p style="font-size: 0.88rem; color: var(--text-muted); margin-bottom: 1.25rem;">
+          <p class="content-copy">
             Repite esta secuencia mental exactamente igual en el tee de salida, en el fairway y en el putt:
           </p>
 
           <div class="routine-list" id="pre-shot-routine-list">
             ${MentalEngine.defaultRoutineSteps.map((step, idx) => `
-              <div class="routine-step" id="routine-step-${idx}" onclick="MentalEngine.toggleStep(${idx})">
-                <div class="step-num">${idx + 1}</div>
-                <div>
-                  <div class="step-text">${step.title}</div>
-                  <div class="step-subtext">${step.desc}</div>
-                </div>
-              </div>
+              <button class="routine-step" type="button" id="routine-step-${idx}" onclick="MentalEngine.toggleStep(${idx})" aria-pressed="false">
+                <span class="step-num" aria-hidden="true">${idx + 1}</span>
+                <span>
+                  <span class="step-text">${step.title}</span>
+                  <span class="step-subtext">${step.desc}</span>
+                </span>
+              </button>
             `).join('')}
           </div>
         </div>
       </div>
 
       <!-- Emotional Reset Protocol -->
-      <div class="card" style="margin-bottom: 2rem;">
+      <div class="card layout-section">
         <div class="card-header">
           <div class="card-title-group">
             <div class="card-icon">⚡</div>
@@ -122,24 +122,24 @@ class MentalEngine {
           <span class="badge badge-blue">Resiliencia en Campo</span>
         </div>
 
-        <div class="grid-3" style="margin-top: 1rem;">
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">1️⃣ Regla de los 10 Pasos</div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">
+        <div class="grid-3 insight-grid">
+          <div class="insight-card">
+            <div class="reset-step-title"><span class="reset-step-number">1</span><span>Regla de los 10 Pasos</span></div>
+            <p>
               Tienes permitido lamentarte únicamente durante 10 pasos tras el golpe. Al llegar al paso 11, el tiro ya es pasado inalterable.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">2️⃣ Guardar el Palo con Intención</div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">
+          <div class="insight-card">
+            <div class="reset-step-title"><span class="reset-step-number">2</span><span>Guardar el Palo con Intención</span></div>
+            <p>
               Al introducir el palo en la bolsa, imagina que guardas allí cualquier pensamiento negativo o frustración.
             </p>
           </div>
 
-          <div style="background: var(--bg-surface-elevated); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);">
-            <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">3️⃣ Re-Enfocar en la Oportunidad</div>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">
+          <div class="insight-card">
+            <div class="reset-step-title"><span class="reset-step-number">3</span><span>Re-Enfocar en la Oportunidad</span></div>
+            <p>
               En lugar de pensar en el hoyo arruinado, míralo como un desafío emocionante para entrenar tu capacidad de recuperación (Scrambling).
             </p>
           </div>
@@ -162,7 +162,10 @@ class MentalEngine {
     MentalEngine.breathingSec = 4;
 
     const btn = document.getElementById('breathing-toggle-btn');
-    if (btn) btn.innerHTML = '⏹ Detener';
+    if (btn) {
+      btn.innerHTML = '⏹ Detener';
+      btn.setAttribute('aria-pressed', 'true');
+    }
 
     MentalEngine.updateBreathingState();
 
@@ -188,7 +191,10 @@ class MentalEngine {
     const text = document.getElementById('breathing-instruction-text');
     const countEl = document.getElementById('breathing-timer-count');
 
-    if (btn) btn.innerHTML = '▶ Iniciar Respiración Guiada';
+    if (btn) {
+      btn.innerHTML = '▶ Iniciar Respiración Guiada';
+      btn.setAttribute('aria-pressed', 'false');
+    }
     if (bubble) bubble.className = 'breathing-bubble';
     if (text) text.innerText = 'Ciclo pausado';
     if (countEl) countEl.innerText = '4';
@@ -223,6 +229,7 @@ class MentalEngine {
     const el = document.getElementById(`routine-step-${idx}`);
     if (el) {
       el.classList.toggle('completed');
+      el.setAttribute('aria-pressed', String(el.classList.contains('completed')));
     }
   }
 }

@@ -2,9 +2,10 @@
 <html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>GolfCoach Pro • Tu Mentor Integral de Golf</title>
   <meta name="description" content="Plataforma de mentoría y entrenamiento integral de golf 360° inspirada en la metodología de SotaPar: técnica, juego corto, juego mental, estrategia y bajada de hándicap.">
+  <link rel="canonical" href="https://adanbrilzgolf.com.ar/">
 
   <!-- Mobile PWA & Web App Meta Tags -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -22,10 +23,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
 
   <!-- Stylesheets -->
-  <link rel="stylesheet" href="css/style.css?v=9">
-  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/style.css?v=26">
+  <link rel="stylesheet" href="css/components.css?v=26">
 </head>
-<body class="auth-resolving">
+<body class="auth-resolving workspace-locked">
+
+  <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
 
   <div class="auth-resolving-screen" id="auth-resolving-screen" role="status" aria-live="polite">
     <div class="brand-badge" aria-hidden="true">⛳</div>
@@ -40,88 +43,110 @@
     <!-- Sidebar Navigation (Desktop / Tablet) -->
     <aside class="sidebar" id="app-sidebar">
       <div class="sidebar-header">
-        <div class="brand-badge">⛳</div>
+        <div class="brand-badge" aria-hidden="true">⛳</div>
         <div class="brand-info">
           <h2>GolfCoach</h2>
           <span>Mentoría 360° SotaPar</span>
         </div>
       </div>
 
-      <ul class="nav-menu">
-        <li class="nav-item active" data-view="dashboard">
+      <nav class="nav-menu" aria-label="Navegación principal">
+        <button class="nav-item active" type="button" data-view="dashboard" aria-current="page">
           <span class="nav-icon">🏠</span>
-          <span>Dashboard 360°</span>
-        </li>
-        <li class="nav-item" data-view="players">
+          <span>Inicio</span>
+        </button>
+        <button class="nav-item" type="button" data-view="players">
           <span class="nav-icon">👥</span>
-          <span>Golfistas & Datos</span>
-        </li>
-        <li class="nav-item" data-view="assessment">
+          <span>Golfistas</span>
+        </button>
+        <button class="nav-item" type="button" data-view="messages">
+          <span class="nav-icon">💬</span>
+          <span>Mensajes con Golfistas</span>
+        </button>
+        <button class="nav-item" type="button" data-view="assessment">
           <span class="nav-icon">📋</span>
           <span>Diagnóstico 360°</span>
           <span class="badge-count">Test</span>
-        </li>
-        <li class="nav-item" data-view="drills">
+        </button>
+        <button class="nav-item" type="button" data-view="drills">
           <span class="nav-icon">🎯</span>
           <span>Entrenamiento & Drills</span>
-        </li>
-        <li class="nav-item" data-view="mental">
+        </button>
+        <button class="nav-item" type="button" data-view="mental">
           <span class="nav-icon">🧠</span>
           <span>Juego Mental & Rutina</span>
-        </li>
-        <li class="nav-item" data-view="tactics">
+        </button>
+        <button class="nav-item" type="button" data-view="tactics">
           <span class="nav-icon">⛳</span>
           <span>Caddy & Estrategia</span>
-        </li>
-        <li class="nav-item" data-view="rounds">
+        </button>
+        <button class="nav-item" type="button" data-view="rounds">
           <span class="nav-icon">📊</span>
           <span>Scorecard & Rondas</span>
-        </li>
-        <li class="nav-item" data-view="mentor">
+        </button>
+        <button class="nav-item" type="button" data-view="mentor">
           <span class="nav-icon">💬</span>
           <span>Mentoría & Metas</span>
-        </li>
-      </ul>
+        </button>
+      </nav>
 
       <div class="sidebar-footer">
         <span class="player-context-label">Golfista seleccionado</span>
-        <div class="player-mini-card" onclick="App.navigateTo('players')" style="cursor: pointer;" title="Cambiar golfista seleccionado">
-          <div class="player-avatar" id="sidebar-player-avatar">A</div>
-          <div class="player-mini-info">
-            <h4 id="sidebar-player-name">Alejandro Golfista</h4>
-            <p id="sidebar-player-hcp">HCP: 18.4 (Meta: 12.0)</p>
-          </div>
-        </div>
+        <button class="player-mini-card" type="button" onclick="App.navigateTo('players')" title="Cambiar golfista seleccionado" aria-label="Cambiar golfista seleccionado">
+          <span class="player-avatar" id="sidebar-player-avatar" aria-hidden="true">—</span>
+          <span class="player-mini-info">
+            <span class="player-mini-name" id="sidebar-player-name">Sin golfista</span>
+            <span class="player-mini-meta" id="sidebar-player-hcp">HCP — · Meta —</span>
+          </span>
+        </button>
       </div>
     </aside>
 
     <!-- Main Content Area -->
-    <main class="main-content">
+    <main class="main-content" id="main-content" tabindex="-1">
       
       <!-- Top Navigation Bar -->
       <header class="topbar">
         <div class="topbar-left">
-          <button class="menu-toggle-btn" id="mobile-drawer-toggle-btn" aria-label="Abrir menú" onclick="App.toggleMobileDrawer()">☰</button>
+          <button class="menu-toggle-btn" id="mobile-drawer-toggle-btn" type="button" aria-label="Abrir menú" aria-controls="mobile-drawer-overlay" aria-expanded="false" onclick="App.toggleMobileDrawer()">☰</button>
           <h1 class="page-title" id="current-page-title">Dashboard 360°</h1>
+          <span class="sr-only" id="route-announcer" role="status" aria-live="polite" aria-atomic="true"></span>
+          <button class="demo-mode-indicator" id="demo-mode-indicator" type="button" hidden onclick="App.openDemoModeInfo()" title="Ver información del modo demo" aria-label="Modo demo activo. Ver información.">
+            <span aria-hidden="true">🧪</span>
+            <span>Modo demo</span>
+          </button>
         </div>
 
-        <div class="topbar-actions">
-          <button class="btn btn-secondary btn-sm pwa-install-button" id="install-app-btn" hidden onclick="PWAEngine.promptInstall()" title="Instalar GolfCoach">
-            📲 Instalar
+        <button class="mobile-topbar-actions-btn" id="mobile-topbar-actions-btn" type="button" aria-label="Abrir acciones" aria-controls="topbar-actions" aria-expanded="false" onclick="App.toggleMobileTopbarActions()">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <circle cx="12" cy="5" r="1.75"></circle>
+            <circle cx="12" cy="12" r="1.75"></circle>
+            <circle cx="12" cy="19" r="1.75"></circle>
+          </svg>
+        </button>
+
+        <div class="topbar-actions" id="topbar-actions">
+          <button class="btn btn-secondary btn-sm pwa-install-button" id="install-app-btn" type="button" hidden onclick="App.closeMobileTopbarActions(); PWAEngine.promptInstall()" title="Instalar GolfCoach">
+            <span class="topbar-action-icon" data-icon="download" aria-hidden="true"></span>
+            <span class="topbar-action-label">Instalar</span>
           </button>
-          <button class="btn-icon" id="auth-access-btn" onclick="AuthEngine.openAccessModal()" title="Acceder por email" aria-label="Acceder por email">
-            ✉️
+          <button class="btn-icon" id="auth-access-btn" type="button" onclick="App.closeMobileTopbarActions(); AuthEngine.openAccessModal()" title="Acceder por email" aria-label="Acceder por email">
+            <span class="topbar-action-icon" aria-hidden="true">✉️</span>
+            <span class="topbar-action-label">Cuenta</span>
           </button>
-          <button class="btn-icon" id="cloud-sync-btn" hidden onclick="CloudSync.openSyncModal()" title="Respaldo y sincronización cloud" aria-label="Respaldo y sincronización cloud">
-            ☁️
+          <button class="btn-icon" id="cloud-sync-btn" type="button" hidden onclick="App.closeMobileTopbarActions(); CloudSync.openSyncModal()" title="Respaldo y sincronización cloud" aria-label="Respaldo y sincronización cloud">
+            <span class="topbar-action-icon" aria-hidden="true">☁️</span>
+            <span class="topbar-action-label">Respaldo cloud</span>
           </button>
-          <button class="btn-icon" id="theme-toggle-btn" onclick="App.toggleTheme()" title="Cambiar tema claro/oscuro">
-            ☀️
+          <button class="btn-icon" id="theme-toggle-btn" type="button" onclick="App.toggleTheme(); App.closeMobileTopbarActions()" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema claro/oscuro">
+            <span class="topbar-action-icon" aria-hidden="true">☀️</span>
+            <span class="topbar-action-label">Cambiar tema</span>
           </button>
-          <button class="btn-icon" id="profile-settings-btn" onclick="App.openProfileModal()" title="Editar golfista seleccionado" aria-label="Editar golfista seleccionado">
-            ⚙️
+          <button class="btn-icon" id="profile-settings-btn" type="button" onclick="App.closeMobileTopbarActions(); App.openProfileModal()" title="Editar golfista seleccionado" aria-label="Editar golfista seleccionado">
+            <span class="topbar-action-icon" aria-hidden="true">⚙️</span>
+            <span class="topbar-action-label">Editar golfista</span>
           </button>
-          <button class="btn btn-primary btn-sm" id="topbar-new-round-btn" onclick="RoundsEngine.openNewRoundModal()">
+          <button class="btn btn-primary btn-sm" type="button" id="topbar-new-round-btn" onclick="App.closeMobileTopbarActions(); RoundsEngine.openNewRoundModal()">
             ➕ Ronda
           </button>
         </div>
@@ -133,7 +158,7 @@
           <span class="workspace-context-icon" aria-hidden="true">👤</span>
           <span class="workspace-context-copy">
             <span class="workspace-context-label" id="workspace-account-label">Entrenador</span>
-            <strong id="workspace-coach-name">Modo local</strong>
+            <strong id="workspace-coach-name">Espacio bloqueado</strong>
           </span>
         </button>
         <span class="workspace-context-divider" aria-hidden="true"></span>
@@ -141,176 +166,202 @@
           <span class="workspace-context-icon" aria-hidden="true">🏌️</span>
           <span class="workspace-context-copy">
             <span class="workspace-context-label">Viendo a</span>
-            <strong id="workspace-player-name">Alejandro Golfista</strong>
+            <strong id="workspace-player-name">Sin golfista</strong>
           </span>
-          <span class="workspace-player-handicap" id="workspace-player-hcp">HCP 18.4</span>
+          <span class="workspace-player-handicap" id="workspace-player-hcp">HCP —</span>
           <span class="workspace-context-change">Cambiar</span>
         </button>
       </section>
 
       <!-- 1. Dashboard View Panel -->
-      <section class="view-panel active" id="dashboard-panel">
+      <section class="view-panel active" id="dashboard-panel" aria-hidden="false">
         <div id="dashboard-container"></div>
       </section>
 
       <!-- Private player experience. Activated only for authenticated golfers. -->
-      <section class="view-panel" id="player-portal-panel" aria-live="polite">
+      <section class="view-panel" id="player-portal-panel" aria-live="polite" aria-hidden="true">
         <div id="player-portal-container"></div>
       </section>
 
       <!-- 2. Players & Database View Panel -->
-      <section class="view-panel" id="players-panel">
+      <section class="view-panel" id="players-panel" aria-hidden="true">
         <div id="players-container"></div>
       </section>
 
+      <!-- Coach-to-player private conversations hub. -->
+      <section class="view-panel" id="messages-panel" aria-hidden="true">
+        <div id="messages-container"></div>
+      </section>
+
       <!-- 3. Assessment View Panel -->
-      <section class="view-panel" id="assessment-panel">
+      <section class="view-panel" id="assessment-panel" aria-hidden="true">
         <div id="assessment-container"></div>
       </section>
 
       <!-- 3. Drills View Panel -->
-      <section class="view-panel" id="drills-panel">
+      <section class="view-panel" id="drills-panel" aria-hidden="true">
         <div id="drills-container"></div>
       </section>
 
       <!-- 4. Mental View Panel -->
-      <section class="view-panel" id="mental-panel">
+      <section class="view-panel" id="mental-panel" aria-hidden="true">
         <div id="mental-container"></div>
       </section>
 
       <!-- 5. Tactics View Panel -->
-      <section class="view-panel" id="tactics-panel">
+      <section class="view-panel" id="tactics-panel" aria-hidden="true">
         <div id="tactics-container"></div>
       </section>
 
       <!-- 6. Rounds View Panel -->
-      <section class="view-panel" id="rounds-panel">
+      <section class="view-panel" id="rounds-panel" aria-hidden="true">
         <div id="rounds-container"></div>
       </section>
 
       <!-- 7. Mentor View Panel -->
-      <section class="view-panel" id="mentor-panel">
+      <section class="view-panel" id="mentor-panel" aria-hidden="true">
         <div id="mentor-container"></div>
       </section>
 
     </main>
 
     <!-- Mobile Bottom Navigation Bar (Thumb Reachable) -->
-    <nav class="bottom-nav-bar" id="mobile-bottom-nav">
-      <div class="bottom-nav-item active" data-view="dashboard" onclick="App.navigateTo('dashboard')">
+    <nav class="bottom-nav-bar coach-bottom-nav" id="mobile-bottom-nav" aria-label="Navegación del entrenador">
+      <button class="bottom-nav-item active" type="button" data-view="dashboard" onclick="App.navigateTo('dashboard')" aria-current="page">
         <span class="bottom-nav-icon">🏠</span>
         <span class="bottom-nav-label">Inicio</span>
-      </div>
-      <div class="bottom-nav-item" data-view="drills" onclick="App.navigateTo('drills')">
+      </button>
+      <button class="bottom-nav-item" type="button" data-view="players" onclick="App.navigateTo('players')">
+        <span class="bottom-nav-icon">👥</span>
+        <span class="bottom-nav-label">Golfistas</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-view="drills" onclick="App.navigateTo('drills')">
         <span class="bottom-nav-icon">🎯</span>
-        <span class="bottom-nav-label">Drills</span>
-      </div>
-      <div class="bottom-nav-item" data-view="mental" onclick="App.navigateTo('mental')">
-        <span class="bottom-nav-icon">🫁</span>
-        <span class="bottom-nav-label">Mente</span>
-      </div>
-      <div class="bottom-nav-item" data-view="tactics" onclick="App.navigateTo('tactics')">
-        <span class="bottom-nav-icon">⛳</span>
-        <span class="bottom-nav-label">Caddy</span>
-      </div>
-      <div class="bottom-nav-item" data-view="rounds" onclick="App.navigateTo('rounds')">
-        <span class="bottom-nav-icon">📊</span>
-        <span class="bottom-nav-label">Score</span>
-      </div>
-      <div class="bottom-nav-item" onclick="App.toggleMobileDrawer()">
+        <span class="bottom-nav-label">Planes</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-view="messages" onclick="App.navigateTo('messages')">
+        <span class="bottom-nav-icon">💬</span>
+        <span class="bottom-nav-label">Mensajes</span>
+      </button>
+      <button class="bottom-nav-item" id="mobile-more-btn" type="button" onclick="App.toggleMobileDrawer()" aria-label="Abrir más secciones" aria-controls="mobile-drawer-overlay" aria-expanded="false">
         <span class="bottom-nav-icon">☰</span>
         <span class="bottom-nav-label">Más</span>
-      </div>
+      </button>
+    </nav>
+
+    <nav class="bottom-nav-bar player-bottom-nav" id="player-bottom-nav" aria-label="Navegación del golfista" hidden>
+      <button class="bottom-nav-item active" type="button" data-player-section="today" onclick="PlayerPortal.navigateToSection('today')" aria-current="page">
+        <span class="bottom-nav-icon">☀️</span>
+        <span class="bottom-nav-label">Hoy</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-player-section="plan" onclick="PlayerPortal.navigateToSection('plan')">
+        <span class="bottom-nav-icon">🎯</span>
+        <span class="bottom-nav-label">Mi plan</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-player-section="progress" onclick="PlayerPortal.navigateToSection('progress')">
+        <span class="bottom-nav-icon">📈</span>
+        <span class="bottom-nav-label">Progreso</span>
+      </button>
+      <button class="bottom-nav-item" type="button" data-player-section="messages" onclick="PlayerPortal.navigateToSection('messages')">
+        <span class="bottom-nav-icon">💬</span>
+        <span class="bottom-nav-label">Mensajes</span>
+      </button>
     </nav>
 
   </div>
 
   <!-- Mobile Drawer Menu Overlay -->
-  <div class="mobile-drawer-overlay" id="mobile-drawer-overlay" onclick="App.closeMobileDrawer(event)">
-    <div class="mobile-drawer-content" onclick="event.stopPropagation()">
+  <div class="mobile-drawer-overlay" id="mobile-drawer-overlay" aria-hidden="true" onclick="App.closeMobileDrawer(event)">
+    <div class="mobile-drawer-content" role="dialog" aria-modal="true" aria-labelledby="mobile-drawer-title" onclick="event.stopPropagation()">
       <div class="sidebar-header">
-        <div class="brand-badge">⛳</div>
+        <div class="brand-badge" aria-hidden="true">⛳</div>
         <div class="brand-info">
-          <h2>GolfCoach</h2>
+          <h2 id="mobile-drawer-title">GolfCoach</h2>
           <span>Menú Completo</span>
         </div>
-        <button class="modal-close" style="margin-left: auto;" onclick="App.closeMobileDrawer()">&times;</button>
+        <button class="modal-close" type="button" style="margin-left: auto;" onclick="App.closeMobileDrawer()" aria-label="Cerrar menú">&times;</button>
       </div>
 
-      <ul class="nav-menu" style="padding-top: 0.5rem;">
-        <li class="nav-item" data-view="dashboard" onclick="App.navigateTo('dashboard'); App.closeMobileDrawer();">
+      <nav class="nav-menu" style="padding-top: 0.5rem;" aria-label="Todas las secciones">
+        <button class="nav-item" type="button" data-view="dashboard" onclick="App.navigateTo('dashboard'); App.closeMobileDrawer();">
           <span class="nav-icon">🏠</span>
           <span>Dashboard 360°</span>
-        </li>
-        <li class="nav-item" data-view="players" onclick="App.navigateTo('players'); App.closeMobileDrawer();">
+        </button>
+        <button class="nav-item" type="button" data-view="players" onclick="App.navigateTo('players'); App.closeMobileDrawer();">
           <span class="nav-icon">👥</span>
-          <span>Golfistas & Datos</span>
-        </li>
-        <li class="nav-item" data-view="assessment" onclick="App.navigateTo('assessment'); App.closeMobileDrawer();">
+          <span>Golfistas</span>
+        </button>
+        <button class="nav-item" type="button" data-view="messages" onclick="App.navigateTo('messages'); App.closeMobileDrawer();">
+          <span class="nav-icon">💬</span>
+          <span>Mensajes con Golfistas</span>
+        </button>
+        <button class="nav-item" type="button" data-view="assessment" onclick="App.navigateTo('assessment'); App.closeMobileDrawer();">
           <span class="nav-icon">📋</span>
           <span>Diagnóstico 360°</span>
-        </li>
-        <li class="nav-item" data-view="drills" onclick="App.navigateTo('drills'); App.closeMobileDrawer();">
+        </button>
+        <button class="nav-item" type="button" data-view="drills" onclick="App.navigateTo('drills'); App.closeMobileDrawer();">
           <span class="nav-icon">🎯</span>
           <span>Entrenamiento & Drills</span>
-        </li>
-        <li class="nav-item" data-view="mental" onclick="App.navigateTo('mental'); App.closeMobileDrawer();">
+        </button>
+        <button class="nav-item" type="button" data-view="mental" onclick="App.navigateTo('mental'); App.closeMobileDrawer();">
           <span class="nav-icon">🧠</span>
           <span>Juego Mental & Rutina</span>
-        </li>
-        <li class="nav-item" data-view="tactics" onclick="App.navigateTo('tactics'); App.closeMobileDrawer();">
+        </button>
+        <button class="nav-item" type="button" data-view="tactics" onclick="App.navigateTo('tactics'); App.closeMobileDrawer();">
           <span class="nav-icon">⛳</span>
           <span>Caddy & Estrategia</span>
-        </li>
-        <li class="nav-item" data-view="rounds" onclick="App.navigateTo('rounds'); App.closeMobileDrawer();">
+        </button>
+        <button class="nav-item" type="button" data-view="rounds" onclick="App.navigateTo('rounds'); App.closeMobileDrawer();">
           <span class="nav-icon">📊</span>
           <span>Scorecard & Rondas</span>
-        </li>
-        <li class="nav-item" data-view="mentor" onclick="App.navigateTo('mentor'); App.closeMobileDrawer();">
+        </button>
+        <button class="nav-item" type="button" data-view="mentor" onclick="App.navigateTo('mentor'); App.closeMobileDrawer();">
           <span class="nav-icon">💬</span>
           <span>Mentoría & Metas</span>
-        </li>
-      </ul>
+        </button>
+      </nav>
 
       <div class="sidebar-footer">
         <span class="player-context-label">Golfista seleccionado</span>
-        <div class="player-mini-card" onclick="App.navigateTo('players'); App.closeMobileDrawer();" style="cursor: pointer;" title="Cambiar golfista seleccionado">
-          <div class="player-avatar" id="drawer-player-avatar">A</div>
-          <div class="player-mini-info">
-            <h4 id="drawer-player-name">Alejandro Golfista</h4>
-            <p id="drawer-player-hcp">HCP 18.4 · Cambiar</p>
-          </div>
-        </div>
+        <button class="player-mini-card" type="button" onclick="App.navigateTo('players'); App.closeMobileDrawer();" title="Cambiar golfista seleccionado" aria-label="Cambiar golfista seleccionado">
+          <span class="player-avatar" id="drawer-player-avatar" aria-hidden="true">A</span>
+          <span class="player-mini-info">
+            <span class="player-mini-name" id="drawer-player-name">Sin golfista</span>
+            <span class="player-mini-meta" id="drawer-player-hcp">HCP — · Cambiar</span>
+          </span>
+        </button>
       </div>
     </div>
   </div>
 
   <!-- Global Modal Overlay (Bottom Sheet on Mobile) -->
-  <div class="modal-overlay" id="global-modal" onclick="if(event.target===this) App.closeModal()">
-    <div class="modal-box" id="global-modal-content">
+  <div class="modal-overlay" id="global-modal" aria-hidden="true" onclick="if(event.target===this) App.requestModalClose()">
+    <div class="modal-box" id="global-modal-content" role="dialog" aria-modal="true" aria-label="Ventana de GolfCoach" tabindex="-1">
       <!-- Dynamic Content Populated by Engine Classes -->
     </div>
   </div>
 
   <!-- Toast Container -->
-  <div class="toast-container" id="toast-container"></div>
+  <div class="toast-container" id="toast-container" aria-label="Notificaciones"></div>
 
   <!-- Scripts in dependency order -->
-  <script src="js/database.js"></script>
-  <script src="js/storage.js"></script>
-  <script src="js/players.js"></script>
-  <script src="js/assessment.js"></script>
-  <script src="js/drills.js"></script>
-  <script src="js/mental.js"></script>
-  <script src="js/tactics.js"></script>
-  <script src="js/rounds.js?v=9"></script>
-  <script src="js/mentor.js"></script>
-  <script src="js/pwa.js?v=9"></script>
+  <script src="js/icons.js?v=26"></script>
+  <script src="js/utils.js?v=26"></script>
+  <script src="js/database.js?v=26"></script>
+  <script src="js/storage.js?v=26"></script>
+  <script src="js/players.js?v=26"></script>
+  <script src="js/assessment.js?v=26"></script>
+  <script src="js/drills.js?v=26"></script>
+  <script src="js/mental.js?v=26"></script>
+  <script src="js/tactics.js?v=26"></script>
+  <script src="js/rounds.js?v=26"></script>
+  <script src="js/mentor.js?v=26"></script>
+  <script src="js/pwa.js?v=26"></script>
   <script src="vendor/supabase/supabase-js-2.112.3.js"></script>
-  <script src="js/auth.js?v=9"></script>
-  <script src="js/player-portal.js?v=9"></script>
-  <script src="js/cloud-sync.js"></script>
-  <script src="js/app.js?v=9"></script>
+  <script src="js/auth.js?v=26"></script>
+  <script src="js/player-portal.js?v=26"></script>
+  <script src="js/cloud-sync.js?v=26"></script>
+  <script src="js/app.js?v=26"></script>
 
 </body>
 </html>

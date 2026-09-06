@@ -6,7 +6,7 @@
  * lista, incrementá CACHE_VERSION para publicar una versión nueva.
  */
 
-const CACHE_VERSION = 'golfcoach-pro-shell-v9';
+const CACHE_VERSION = 'golfcoach-pro-shell-v26';
 const CACHE_PREFIX = 'golfcoach-pro-';
 const toScopeUrl = (path) => new URL(path, self.registration.scope).href;
 
@@ -14,22 +14,24 @@ const APP_SHELL = [
   './',
   './index.html',
   './manifest.json',
-  './css/style.css?v=9',
-  './css/components.css',
-  './js/database.js',
-  './js/storage.js',
-  './js/players.js',
-  './js/pwa.js?v=9',
-  './js/assessment.js',
-  './js/drills.js',
-  './js/mental.js',
-  './js/tactics.js',
-  './js/rounds.js?v=9',
-  './js/mentor.js',
-  './js/app.js?v=9',
-  './js/auth.js?v=9',
-  './js/player-portal.js?v=9',
-  './js/cloud-sync.js',
+  './css/style.css?v=26',
+  './css/components.css?v=26',
+  './js/icons.js?v=26',
+  './js/utils.js?v=26',
+  './js/database.js?v=26',
+  './js/storage.js?v=26',
+  './js/players.js?v=26',
+  './js/pwa.js?v=26',
+  './js/assessment.js?v=26',
+  './js/drills.js?v=26',
+  './js/mental.js?v=26',
+  './js/tactics.js?v=26',
+  './js/rounds.js?v=26',
+  './js/mentor.js?v=26',
+  './js/app.js?v=26',
+  './js/auth.js?v=26',
+  './js/player-portal.js?v=26',
+  './js/cloud-sync.js?v=26',
   './vendor/supabase/supabase-js-2.112.3.js',
   './assets/icons/favicon-32.png',
   './assets/icons/apple-touch-icon.png',
@@ -97,12 +99,16 @@ self.addEventListener('fetch', (event) => {
 
 async function networkFirstNavigation(request) {
   try {
-    const response = await fetch(request);
+    const response = await Promise.race([
+      fetch(request),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Tiempo de espera agotado.')), 4500))
+    ]);
     if (response && response.ok) {
       const cache = await caches.open(CACHE_VERSION);
       await cache.put(APP_SHELL_URL, response.clone());
+      return response;
     }
-    return response;
+    throw new Error(`Respuesta de navegación no válida: ${response?.status || 'sin estado'}`);
   } catch (error) {
     return (await caches.match(APP_SHELL_URL)) || (await caches.match(toScopeUrl('./')));
   }

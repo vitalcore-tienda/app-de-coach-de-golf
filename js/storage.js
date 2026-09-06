@@ -17,6 +17,9 @@ const STORAGE_KEYS = {
   GOALS: 'golfcoach_goals',
   CHAT_HISTORY: 'golfcoach_chat_history',
   NOTES: 'golfcoach_notes',
+  HANDICAP_HISTORY: 'golfcoach_handicap_history',
+  TOURNAMENTS: 'golfcoach_tournaments',
+  LEGACY_CLAIM_OWNER: 'golfcoach_legacy_claim_owner',
   THEME: 'golfcoach_theme'
 };
 
@@ -26,103 +29,45 @@ const PLAYER_DATA_KEYS = [
   STORAGE_KEYS.MENTAL_ROUTINE,
   STORAGE_KEYS.GOALS,
   STORAGE_KEYS.CHAT_HISTORY,
-  STORAGE_KEYS.NOTES
+  STORAGE_KEYS.NOTES,
+  STORAGE_KEYS.HANDICAP_HISTORY,
+  STORAGE_KEYS.TOURNAMENTS
 ];
 
 const DEFAULT_PROFILE = {
-  name: 'Alejandro Golfista',
+  name: '',
   email: '',
   phone: '',
   birthDate: '',
   gender: '',
   federationLicense: '',
-  handicap: 18.4,
-  targetHandicap: 12.0,
-  playerCategory: 'Aficionado en Búsqueda de Consistencia',
-  experienceYears: 4,
+  handicap: null,
+  targetHandicap: null,
+  playerCategory: '',
+  experienceYears: 0,
   dominantHand: 'Diestro',
-  driverDistanceAvg: 220,
-  homeClub: 'Real Club de Golf',
+  driverDistanceAvg: null,
+  homeClub: '',
   notes: '',
   createdDate: new Date().toISOString()
 };
 
 const DEFAULT_ASSESSMENT = {
-  completed: true,
+  completed: false,
   scores: {
-    swing: 65,
-    shortGame: 55,
-    strategy: 60,
-    mental: 50,
-    fitness: 70
+    swing: 0,
+    shortGame: 0,
+    strategy: 0,
+    mental: 0,
+    fitness: 0
   },
-  lastDate: new Date().toISOString()
+  lastDate: null
 };
 
-const DEFAULT_GOALS = [
-  { id: 'g1', title: 'Bajar de 18 a 14 de Hándicap', targetDate: '2026-12-31', progress: 45, category: 'Handicap' },
-  { id: 'g2', title: 'Reducir promedio a menos de 32 putts por ronda', targetDate: '2026-10-30', progress: 65, category: 'Juego Corto' },
-  { id: 'g3', title: 'Completar 100% de la Rutina Pre-Golpe en cada tiro', targetDate: '2026-09-30', progress: 80, category: 'Juego Mental' }
-];
-
-const DEFAULT_ROUNDS = [
-  {
-    id: 'r1',
-    date: '2026-08-15',
-    course: 'Augusta Green Golf Club',
-    holesCount: 18,
-    totalPar: 72,
-    totalScore: 86,
-    scoreDiff: '+14',
-    fairwaysHit: 8,
-    fairwaysTotal: 14,
-    girHit: 7,
-    girTotal: 18,
-    totalPutts: 33,
-    penalties: 2,
-    bunkerSaves: 2,
-    bunkersTotal: 3,
-    notes: 'Buen control de maderas en el tee. El putt de media distancia salvó varios pares.',
-    holes: []
-  },
-  {
-    id: 'r2',
-    date: '2026-08-08',
-    course: 'Lakeside Hills',
-    holesCount: 18,
-    totalPar: 72,
-    totalScore: 90,
-    scoreDiff: '+18',
-    fairwaysHit: 6,
-    fairwaysTotal: 14,
-    girHit: 5,
-    girTotal: 18,
-    totalPutts: 36,
-    penalties: 3,
-    bunkerSaves: 1,
-    bunkersTotal: 4,
-    notes: 'Frustración tras un tripateo en el hoyo 5. Necesito reforzar la rutina pre-golpe y respiración.',
-    holes: []
-  }
-];
-
-const DEFAULT_NOTES = [
-  {
-    id: 'n1',
-    date: '2026-08-18',
-    title: 'Sensación en el take away',
-    content: 'Mantener la cara del palo cuadrada al arrancar el backswing sin quebrar las muñecas antes de tiempo.',
-    category: 'Swing'
-  }
-];
-
-const DEFAULT_CHAT_HISTORY = [
-  {
-    sender: 'coach',
-    text: '¡Hola! Soy tu Mentor de Golf. Basado en la metodología de SotaPar, estoy aquí para guiarte en técnica, estrategia, juego mental y bajada de hándicap. ¿En qué aspecto de tu juego quieres enfocarte hoy?',
-    time: '10:00'
-  }
-];
+const DEFAULT_GOALS = [];
+const DEFAULT_ROUNDS = [];
+const DEFAULT_NOTES = [];
+const DEFAULT_CHAT_HISTORY = [];
 
 class StorageManager {
   static initialized = false;
@@ -132,10 +77,38 @@ class StorageManager {
   static activeProfile = null;
   static activeRounds = null;
   static playerDataCache = {};
+  static workspaceOwnerId = null;
+  static unclaimedLegacyCount = 0;
+  static workspaceGeneration = 0;
+  static playerSelectionGeneration = 0;
 
   static clone(value) {
     if (value === undefined || value === null) return value;
     return JSON.parse(JSON.stringify(value));
+  }
+
+  static optionalNumber(value, fallback = null) {
+    if (value === '' || value === null || value === undefined) return fallback;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  static localDateISO(date = new Date()) {
+    if (window.GolfUtils?.localDateISO) return GolfUtils.localDateISO(date);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  static isValidDateISO(value) {
+    const text = String(value || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
+    const [year, month, day] = text.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year
+      && date.getUTCMonth() === month - 1
+      && date.getUTCDate() === day;
   }
 
   static get(key, defaultValue = null) {
@@ -158,13 +131,71 @@ class StorageManager {
     }
   }
 
+  static commitFallbackWrites(entries) {
+    const writes = [...new Map(entries.map((entry) => [entry.key, entry])).values()];
+    let snapshots;
+    try {
+      snapshots = writes.map((entry) => ({ key: entry.key, value: localStorage.getItem(entry.key) }));
+      writes.forEach((entry) => localStorage.setItem(entry.key, JSON.stringify(entry.value)));
+      return true;
+    } catch (error) {
+      if (snapshots) {
+        snapshots.slice().reverse().forEach((snapshot) => {
+          try {
+            if (snapshot.value === null) localStorage.removeItem(snapshot.key);
+            else localStorage.setItem(snapshot.key, snapshot.value);
+          } catch (rollbackError) {
+            console.error('No se pudo restaurar un dato local durante el rollback:', rollbackError);
+          }
+        });
+      }
+      throw new Error('No se pudo completar el guardado. Los cambios anteriores fueron restaurados.');
+    }
+  }
+
   static makeId(prefix) {
     if (window.GolfDatabase) return GolfDatabase.createId(prefix);
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
   }
 
   static getPlayerScopedStorageKey(key, playerId = StorageManager.activePlayerId) {
-    return `${key}:${playerId || 'default'}`;
+    const ownerId = StorageManager.workspaceOwnerId || 'locked';
+    return `${key}:owner:${ownerId}:player:${playerId || 'none'}`;
+  }
+
+  static getWorkspaceStorageKey(key, ownerId = StorageManager.workspaceOwnerId) {
+    return `${key}:owner:${ownerId || 'locked'}`;
+  }
+
+  static getWorkspaceValue(key, defaultValue = null) {
+    if (!StorageManager.workspaceOwnerId) return StorageManager.clone(defaultValue);
+    return StorageManager.get(StorageManager.getWorkspaceStorageKey(key), defaultValue);
+  }
+
+  static setWorkspaceValue(key, value) {
+    if (!StorageManager.workspaceOwnerId) throw new Error('El espacio del entrenador está bloqueado.');
+    if (!StorageManager.set(StorageManager.getWorkspaceStorageKey(key), value) && !StorageManager.persistenceAvailable) {
+      throw new Error('No se pudo guardar en este dispositivo.');
+    }
+    return true;
+  }
+
+  static isWorkspaceUnlocked() {
+    return Boolean(StorageManager.workspaceOwnerId);
+  }
+
+  static requireWorkspace() {
+    if (!StorageManager.workspaceOwnerId) {
+      throw new Error('Iniciá sesión como entrenador para acceder a las fichas locales.');
+    }
+    return StorageManager.workspaceOwnerId;
+  }
+
+  static clearActiveState() {
+    StorageManager.activePlayerId = null;
+    StorageManager.activeProfile = null;
+    StorageManager.activeRounds = [];
+    StorageManager.playerDataCache = {};
   }
 
   static defaultPlayerData(key) {
@@ -174,7 +205,9 @@ class StorageManager {
       [STORAGE_KEYS.MENTAL_ROUTINE]: {},
       [STORAGE_KEYS.GOALS]: DEFAULT_GOALS,
       [STORAGE_KEYS.CHAT_HISTORY]: DEFAULT_CHAT_HISTORY,
-      [STORAGE_KEYS.NOTES]: DEFAULT_NOTES
+      [STORAGE_KEYS.NOTES]: DEFAULT_NOTES,
+      [STORAGE_KEYS.HANDICAP_HISTORY]: [],
+      [STORAGE_KEYS.TOURNAMENTS]: []
     };
     return StorageManager.clone(defaults[key] ?? null);
   }
@@ -182,15 +215,25 @@ class StorageManager {
   static normalizeProfile(profile = {}, options = {}) {
     const now = new Date().toISOString();
     const fallback = StorageManager.clone(DEFAULT_PROFILE);
+    const ownerId = Object.prototype.hasOwnProperty.call(options, 'ownerId')
+      ? options.ownerId
+      : (profile.ownerId || StorageManager.workspaceOwnerId || null);
     return {
       ...fallback,
       ...StorageManager.clone(profile),
       id: profile.id || options.id || StorageManager.activePlayerId || StorageManager.makeId('player'),
-      name: String(profile.name || fallback.name).trim() || fallback.name,
-      handicap: Number.isFinite(Number(profile.handicap)) ? Number(profile.handicap) : fallback.handicap,
-      targetHandicap: Number.isFinite(Number(profile.targetHandicap)) ? Number(profile.targetHandicap) : fallback.targetHandicap,
-      experienceYears: Number.isFinite(Number(profile.experienceYears)) ? Number(profile.experienceYears) : fallback.experienceYears,
-      driverDistanceAvg: Number.isFinite(Number(profile.driverDistanceAvg)) ? Number(profile.driverDistanceAvg) : fallback.driverDistanceAvg,
+      ownerId,
+      name: String(profile.name || fallback.name).trim(),
+      email: String(profile.email || '').trim().toLowerCase(),
+      phone: String(profile.phone || '').trim(),
+      birthDate: String(profile.birthDate || '').trim(),
+      federationLicense: String(profile.federationLicense || '').trim(),
+      homeClub: String(profile.homeClub || '').trim(),
+      playerCategory: String(profile.playerCategory || '').trim(),
+      handicap: StorageManager.optionalNumber(profile.handicap, fallback.handicap),
+      targetHandicap: StorageManager.optionalNumber(profile.targetHandicap, fallback.targetHandicap),
+      experienceYears: StorageManager.optionalNumber(profile.experienceYears, fallback.experienceYears),
+      driverDistanceAvg: StorageManager.optionalNumber(profile.driverDistanceAvg, fallback.driverDistanceAvg),
       createdDate: profile.createdDate || profile.createdAt || now,
       createdAt: profile.createdAt || profile.createdDate || now,
       updatedAt: now
@@ -208,7 +251,8 @@ class StorageManager {
       ...StorageManager.clone(round),
       id: round.id || StorageManager.makeId('round'),
       playerId: round.playerId || StorageManager.activePlayerId,
-      date: round.date || new Date().toISOString().split('T')[0],
+      ownerId: round.ownerId || StorageManager.workspaceOwnerId || null,
+      date: round.date || StorageManager.localDateISO(),
       course: String(round.course || 'Club de Golf').trim() || 'Club de Golf',
       kind: round.kind || (round.tournamentId ? 'Torneo' : 'Práctica'),
       tournamentId: round.tournamentId || null,
@@ -222,6 +266,23 @@ class StorageManager {
     };
   }
 
+  static validateProfile(player, { requireHandicap = false } = {}) {
+    const handicap = StorageManager.optionalNumber(player.handicap);
+    const target = StorageManager.optionalNumber(player.targetHandicap);
+    const experience = StorageManager.optionalNumber(player.experienceYears, 0);
+    const driverDistance = StorageManager.optionalNumber(player.driverDistanceAvg);
+    if (!player.name) throw new Error('Ingresá el nombre del golfista.');
+    if (player.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(player.email)) throw new Error('Ingresá un email válido o dejalo vacío.');
+    if (player.birthDate && !StorageManager.isValidDateISO(player.birthDate)) throw new Error('La fecha de nacimiento no es válida.');
+    if (player.birthDate && player.birthDate > StorageManager.localDateISO()) throw new Error('La fecha de nacimiento no puede estar en el futuro.');
+    if (requireHandicap && handicap === null) throw new Error('Ingresá el hándicap actual.');
+    if (handicap !== null && (handicap < -10 || handicap > 54)) throw new Error('El hándicap debe estar entre -10 y 54.');
+    if (target !== null && (target < -10 || target > 54)) throw new Error('El hándicap objetivo debe estar entre -10 y 54.');
+    if (experience < 0 || experience > 100) throw new Error('Los años de experiencia no son válidos.');
+    if (driverDistance !== null && (driverDistance < 0 || driverDistance > 500)) throw new Error('La distancia de driver no es válida.');
+    return player;
+  }
+
   static async initialize() {
     if (StorageManager.initialized) return StorageManager.persistenceAvailable;
     if (StorageManager.initializingPromise) return StorageManager.initializingPromise;
@@ -231,36 +292,20 @@ class StorageManager {
         await GolfDatabase.open();
         StorageManager.persistenceAvailable = true;
         await StorageManager.migrateLegacyData();
-
-        const activeSetting = await GolfDatabase.get(GOLF_DATABASE.STORES.SETTINGS, 'active-player');
-        const requestedPlayerId = activeSetting?.value || StorageManager.get(STORAGE_KEYS.ACTIVE_PLAYER, null);
-        const players = await GolfDatabase.getAll(GOLF_DATABASE.STORES.PLAYERS);
-        const playerId = players.some((player) => player.id === requestedPlayerId)
-          ? requestedPlayerId
-          : players[0]?.id;
-
-        if (!playerId) throw new Error('No se pudo preparar un perfil de golfista.');
-        await StorageManager.loadActivePlayer(playerId, false);
+        await StorageManager.migrateExistingCloudOwnership();
+        await StorageManager.refreshUnclaimedLegacyCount();
       } catch (error) {
         console.warn('Se usará el respaldo local de GolfCoach Pro:', error);
         StorageManager.persistenceAvailable = false;
-        const savedProfile = StorageManager.get(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE);
-        const profile = StorageManager.normalizeProfile(savedProfile, { id: savedProfile.id || 'player_local' });
-        StorageManager.activePlayerId = profile.id;
-        StorageManager.activeProfile = profile;
-        StorageManager.activeRounds = StorageManager.get(STORAGE_KEYS.ROUNDS, DEFAULT_ROUNDS)
-          .map((round) => StorageManager.normalizeRound({ ...round, playerId: profile.id }));
-        StorageManager.playerDataCache = {};
-        PLAYER_DATA_KEYS.forEach((key) => {
-          StorageManager.playerDataCache[key] = StorageManager.get(
-            StorageManager.getPlayerScopedStorageKey(key, profile.id),
-            StorageManager.get(key, StorageManager.defaultPlayerData(key))
-          );
-        });
-        StorageManager.set(STORAGE_KEYS.PROFILE, profile);
-        StorageManager.set(STORAGE_KEYS.ACTIVE_PLAYER, profile.id);
+        const legacyPlayers = StorageManager.get(STORAGE_KEYS.PLAYERS, []);
+        const legacyProfile = StorageManager.get(STORAGE_KEYS.PROFILE, null);
+        const legacyClaimOwner = StorageManager.get(STORAGE_KEYS.LEGACY_CLAIM_OWNER, null);
+        StorageManager.unclaimedLegacyCount = legacyClaimOwner
+          ? 0
+          : (legacyPlayers.length || legacyProfile ? Math.max(legacyPlayers.length, 1) : 0);
       }
 
+      StorageManager.clearActiveState();
       StorageManager.initialized = true;
       return StorageManager.persistenceAvailable;
     })();
@@ -278,34 +323,56 @@ class StorageManager {
     if (migration?.completed) return;
 
     const legacyProfile = StorageManager.get(STORAGE_KEYS.PROFILE, null);
-    const profile = StorageManager.normalizeProfile(legacyProfile || DEFAULT_PROFILE, {
-      id: legacyProfile?.id || 'player_alejandro_demo'
-    });
-    await GolfDatabase.put(stores.PLAYERS, profile);
+    const legacyPlayers = StorageManager.get(STORAGE_KEYS.PLAYERS, []);
+    const sourcePlayers = Array.isArray(legacyPlayers) ? [...legacyPlayers] : [];
+    if (legacyProfile && !sourcePlayers.some((player) => player?.id === legacyProfile.id)) {
+      sourcePlayers.unshift(legacyProfile);
+    }
 
-    await GolfDatabase.put(stores.HANDICAP_HISTORY, {
-      id: StorageManager.makeId('hcp'),
-      playerId: profile.id,
-      date: String(profile.createdDate || new Date().toISOString()).slice(0, 10),
-      handicap: profile.handicap,
-      source: 'Perfil inicial',
-      notes: 'Registro migrado desde la configuración inicial.',
-      createdAt: new Date().toISOString()
-    });
+    const profiles = sourcePlayers
+      .filter((profile) => profile && String(profile.name || '').trim())
+      .map((profile) => StorageManager.normalizeProfile(profile, {
+        id: profile.id || StorageManager.makeId('player'),
+        ownerId: null
+      }))
+      .map((profile) => ({ ...profile, ownerId: null, legacyUnclaimed: true }));
 
-    const legacyRounds = StorageManager.get(STORAGE_KEYS.ROUNDS, DEFAULT_ROUNDS)
-      .map((round) => StorageManager.normalizeRound({ ...round, playerId: profile.id }));
-    await GolfDatabase.replacePlayerRounds(profile.id, legacyRounds);
+    if (profiles.length) {
+      await GolfDatabase.putMany(stores.PLAYERS, profiles);
+      const primaryProfile = profiles.find((profile) => profile.id === legacyProfile?.id) || profiles[0];
+      const legacyRounds = StorageManager.get(STORAGE_KEYS.ROUNDS, [])
+        .map((round) => StorageManager.normalizeRound({
+          ...round,
+          playerId: primaryProfile.id,
+          ownerId: null
+        }))
+        .map((round) => ({ ...round, ownerId: null }));
+      if (legacyRounds.length) await GolfDatabase.replacePlayerRounds(primaryProfile.id, legacyRounds, null);
 
-    for (const key of PLAYER_DATA_KEYS) {
-      const value = StorageManager.get(key, null);
-      if (value !== null) {
-        await GolfDatabase.put(stores.PLAYER_DATA, {
-          id: `${profile.id}:${key}`,
-          playerId: profile.id,
-          key,
-          value,
-          updatedAt: new Date().toISOString()
+      for (const key of PLAYER_DATA_KEYS) {
+        const value = StorageManager.get(key, null);
+        if (value !== null) {
+          await GolfDatabase.put(stores.PLAYER_DATA, {
+            id: `${primaryProfile.id}:${key}`,
+            playerId: primaryProfile.id,
+            ownerId: null,
+            key,
+            value,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+
+      if (StorageManager.optionalNumber(primaryProfile.handicap) !== null) {
+        await GolfDatabase.put(stores.HANDICAP_HISTORY, {
+          id: StorageManager.makeId('hcp'),
+          playerId: primaryProfile.id,
+          ownerId: null,
+          date: String(primaryProfile.createdDate || StorageManager.localDateISO()).slice(0, 10),
+          handicap: primaryProfile.handicap,
+          source: 'Migración local',
+          notes: 'Registro local anterior pendiente de asignación a un entrenador.',
+          createdAt: new Date().toISOString()
         });
       }
     }
@@ -313,33 +380,405 @@ class StorageManager {
     await GolfDatabase.put(stores.SETTINGS, {
       id: 'legacy-migration-v1',
       completed: true,
-      completedAt: new Date().toISOString()
+      completedAt: new Date().toISOString(),
+      importedPlayers: profiles.length
     });
-    await GolfDatabase.put(stores.SETTINGS, { id: 'active-player', value: profile.id });
   }
 
-  static async loadActivePlayer(playerId, saveSelection = true) {
+  static activePlayerSettingId(ownerId = StorageManager.workspaceOwnerId) {
+    return `active-player:${ownerId || 'locked'}`;
+  }
+
+  static async migrateExistingCloudOwnership() {
+    if (!StorageManager.persistenceAvailable) return;
+    const stores = GOLF_DATABASE.STORES;
+    const players = await GolfDatabase.getAll(stores.PLAYERS);
+    const linkedPlayers = players.filter((player) => !player.ownerId && player.cloudOwnerId);
+    if (!linkedPlayers.length) return;
+
+    const ownersByPlayer = new Map(linkedPlayers.map((player) => [player.id, player.cloudOwnerId]));
+    await GolfDatabase.putMany(stores.PLAYERS, linkedPlayers.map((player) => ({
+      ...player,
+      ownerId: player.cloudOwnerId,
+      legacyUnclaimed: false,
+      updatedAt: player.updatedAt || new Date().toISOString()
+    })));
+
+    const childStores = [
+      stores.HANDICAP_HISTORY,
+      stores.TOURNAMENTS,
+      stores.ROUNDS,
+      stores.ROUND_HOLES,
+      stores.SHOT_LOGS,
+      stores.PLAYER_DATA
+    ];
+    for (const storeName of childStores) {
+      const rows = await GolfDatabase.getAll(storeName);
+      const linkedRows = rows
+        .filter((row) => ownersByPlayer.has(row.playerId) && !row.ownerId)
+        .map((row) => ({ ...row, ownerId: ownersByPlayer.get(row.playerId) }));
+      if (linkedRows.length) await GolfDatabase.putMany(storeName, linkedRows);
+    }
+  }
+
+  static async refreshUnclaimedLegacyCount() {
+    if (!StorageManager.persistenceAvailable) return StorageManager.unclaimedLegacyCount;
+    const players = await GolfDatabase.getAll(GOLF_DATABASE.STORES.PLAYERS);
+    StorageManager.unclaimedLegacyCount = players.filter((player) => !player.ownerId).length;
+    return StorageManager.unclaimedLegacyCount;
+  }
+
+  static hasUnclaimedLegacyData() {
+    return StorageManager.unclaimedLegacyCount > 0;
+  }
+
+  static isDemoPlayer(player) {
+    if (!player) return false;
+    return player.isDemo === true || (
+      player.id === 'player_alejandro_demo' &&
+      String(player.name || '').trim() === 'Alejandro Golfista'
+    );
+  }
+
+  static normalizeDemoIdentity(player) {
+    const normalized = StorageManager.clone(player);
+    if (!StorageManager.isDemoPlayer(normalized)) return normalized;
+    normalized.isDemo = true;
+    if (
+      normalized.id === 'player_alejandro_demo' &&
+      String(normalized.name || '').trim() === 'Alejandro Golfista'
+    ) {
+      normalized.demoOriginalName = normalized.name;
+      normalized.name = 'Golfista Demo (anterior)';
+    }
+    return normalized;
+  }
+
+  static dateOffsetISO(offsetDays = 0) {
+    const date = new Date();
+    date.setHours(12, 0, 0, 0);
+    date.setDate(date.getDate() + Number(offsetDays || 0));
+    return StorageManager.localDateISO(date);
+  }
+
+  static buildDemoHoles(totalScore, totalPutts, seed = 0) {
+    const pars = [4, 4, 3, 5, 4, 4, 3, 5, 4, 4, 4, 3, 5, 4, 4, 3, 5, 4];
+    let scoreExtra = Math.max(0, Number(totalScore) - pars.reduce((sum, par) => sum + par, 0));
+    let puttExtra = Math.max(0, Number(totalPutts) - pars.length);
+    return pars.map((par, index) => {
+      const strokesExtra = scoreExtra > 0 ? 1 : 0;
+      const puttsExtra = puttExtra > 0 ? 1 : 0;
+      scoreExtra -= strokesExtra;
+      puttExtra -= puttsExtra;
+      return {
+        hole: index + 1,
+        par,
+        strokes: par + strokesExtra,
+        putts: 1 + puttsExtra,
+        fir: par > 3 ? ((index + seed) % 3 !== 0) : null,
+        gir: (index + seed) % 3 === 1,
+        bunker: false,
+        penalty: 0,
+        completed: true
+      };
+    });
+  }
+
+  static buildDemoFixture(ownerId) {
+    const now = new Date().toISOString();
+    const playerId = StorageManager.makeId('player_demo');
+    const player = StorageManager.normalizeProfile({
+      id: playerId,
+      ownerId,
+      name: 'Golfista Demo',
+      handicap: 16.4,
+      targetHandicap: 12,
+      playerCategory: 'Amateur en progreso',
+      experienceYears: 4,
+      dominantHand: 'Diestro',
+      driverDistanceAvg: 205,
+      homeClub: 'Club de ejemplo',
+      notes: 'Ficha generada exclusivamente para explorar GolfCoach.',
+      isDemo: true,
+      demoVersion: 1,
+      demoCreatedAt: now
+    }, { id: playerId, ownerId });
+
+    const assessment = {
+      completed: true,
+      scores: { swing: 62, shortGame: 58, strategy: 70, mental: 55, fitness: 66 },
+      lastDate: StorageManager.dateOffsetISO(-18),
+      isDemo: true
+    };
+    const goals = [
+      {
+        id: StorageManager.makeId('goal_demo'),
+        title: 'Bajar el hándicap a 12',
+        category: 'Handicap',
+        targetDate: StorageManager.dateOffsetISO(90),
+        progress: 45,
+        isDemo: true
+      },
+      {
+        id: StorageManager.makeId('goal_demo'),
+        title: 'Mejorar el control de distancia en putt',
+        category: 'Juego Corto',
+        targetDate: StorageManager.dateOffsetISO(45),
+        progress: 60,
+        isDemo: true
+      }
+    ];
+    const notes = [{
+      id: StorageManager.makeId('note_demo'),
+      date: StorageManager.dateOffsetISO(-10),
+      title: 'Ejemplo de nota del entrenador',
+      content: 'Datos simulados: priorizar rutina previa y control de distancia en los primeros nueve hoyos.',
+      category: 'Demostración',
+      isDemo: true
+    }];
+    const roundSpecs = [
+      { days: -9, score: 83, putts: 31, course: 'Campo Demo Norte', seed: 1 },
+      { days: -31, score: 86, putts: 33, course: 'Campo Demo Sur', seed: 2 },
+      { days: -58, score: 89, putts: 35, course: 'Campo Demo Norte', seed: 3 }
+    ];
+    const rounds = roundSpecs.map((spec) => {
+      const holes = StorageManager.buildDemoHoles(spec.score, spec.putts, spec.seed);
+      const fairwayHoles = holes.filter((hole) => typeof hole.fir === 'boolean');
+      const greenHoles = holes.filter((hole) => typeof hole.gir === 'boolean');
+      return StorageManager.normalizeRound({
+        id: StorageManager.makeId('round_demo'),
+        playerId,
+        ownerId,
+        date: StorageManager.dateOffsetISO(spec.days),
+        course: spec.course,
+        kind: 'Práctica demo',
+        holesCount: 18,
+        totalPar: 72,
+        totalScore: spec.score,
+        scoreToPar: spec.score - 72,
+        fairwaysHit: fairwayHoles.filter((hole) => hole.fir).length,
+        fairwaysTotal: fairwayHoles.length,
+        girHit: greenHoles.filter((hole) => hole.gir).length,
+        girTotal: greenHoles.length,
+        totalPutts: spec.putts,
+        penalties: 0,
+        bunkerSaves: 0,
+        bunkersTotal: 0,
+        notes: 'Ronda simulada para explorar las estadísticas.',
+        holes,
+        isDemo: true
+      });
+    });
+    const handicapHistory = [
+      {
+        id: StorageManager.makeId('hcp_demo'),
+        playerId,
+        ownerId,
+        date: StorageManager.dateOffsetISO(-90),
+        handicap: 17.8,
+        source: 'Dato de demostración',
+        notes: 'Valor simulado.',
+        createdAt: now,
+        isDemo: true
+      },
+      {
+        id: StorageManager.makeId('hcp_demo'),
+        playerId,
+        ownerId,
+        date: StorageManager.dateOffsetISO(-5),
+        handicap: 16.4,
+        source: 'Dato de demostración',
+        notes: 'Valor simulado.',
+        createdAt: now,
+        isDemo: true
+      }
+    ];
+    return { player, assessment, goals, notes, rounds, handicapHistory };
+  }
+
+  static async unlockWorkspace(ownerId) {
+    if (!StorageManager.initialized) await StorageManager.initialize();
+    const normalizedOwnerId = String(ownerId || '').trim();
+    if (!normalizedOwnerId) {
+      StorageManager.lockWorkspace();
+      return false;
+    }
+
+    StorageManager.workspaceGeneration += 1;
+    StorageManager.playerSelectionGeneration += 1;
+    const generation = StorageManager.workspaceGeneration;
+    const selectionGeneration = StorageManager.playerSelectionGeneration;
+    StorageManager.workspaceOwnerId = normalizedOwnerId;
+    StorageManager.clearActiveState();
+
+    if (StorageManager.persistenceAvailable) {
+      const players = await GolfDatabase.getAllByIndex(
+        GOLF_DATABASE.STORES.PLAYERS,
+        'ownerId',
+        normalizedOwnerId
+      );
+      const activeSetting = await GolfDatabase.get(
+        GOLF_DATABASE.STORES.SETTINGS,
+        StorageManager.activePlayerSettingId(normalizedOwnerId)
+      );
+      const requestedPlayerId = activeSetting?.value || StorageManager.getWorkspaceValue(STORAGE_KEYS.ACTIVE_PLAYER, null);
+      const playerId = players.some((player) => player.id === requestedPlayerId)
+        ? requestedPlayerId
+        : players[0]?.id;
+      if (playerId) await StorageManager.loadActivePlayer(playerId, false, generation, selectionGeneration);
+      await StorageManager.refreshUnclaimedLegacyCount();
+      return true;
+    }
+
+    await StorageManager.loadFallbackWorkspace(generation);
+    return true;
+  }
+
+  static lockWorkspace() {
+    StorageManager.workspaceGeneration += 1;
+    StorageManager.playerSelectionGeneration += 1;
+    StorageManager.workspaceOwnerId = null;
+    StorageManager.clearActiveState();
+  }
+
+  static async loadFallbackWorkspace(generation = StorageManager.workspaceGeneration) {
+    StorageManager.requireWorkspace();
+    const players = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
+    const requestedPlayerId = StorageManager.getWorkspaceValue(STORAGE_KEYS.ACTIVE_PLAYER, null);
+    const playerId = players.some((player) => player.id === requestedPlayerId)
+      ? requestedPlayerId
+      : players[0]?.id;
+    if (!playerId || generation !== StorageManager.workspaceGeneration) return null;
+    return StorageManager.setActivePlayer(playerId);
+  }
+
+  static async claimLegacyWorkspace() {
+    const ownerId = StorageManager.requireWorkspace();
+
+    if (!StorageManager.persistenceAvailable) {
+      const existingClaimOwner = StorageManager.get(STORAGE_KEYS.LEGACY_CLAIM_OWNER, null);
+      if (existingClaimOwner && existingClaimOwner !== ownerId) {
+        StorageManager.unclaimedLegacyCount = 0;
+        return 0;
+      }
+      const legacyPlayers = StorageManager.get(STORAGE_KEYS.PLAYERS, []);
+      const legacyProfile = StorageManager.get(STORAGE_KEYS.PROFILE, null);
+      const players = Array.isArray(legacyPlayers) ? [...legacyPlayers] : [];
+      if (legacyProfile && !players.some((player) => player?.id === legacyProfile.id)) players.unshift(legacyProfile);
+      const claimed = players
+        .filter((player) => (
+          player &&
+          String(player.name || '').trim() &&
+          (!player.cloudOwnerId || player.cloudOwnerId === ownerId)
+        ))
+        .map((player) => StorageManager.normalizeDemoIdentity({
+          ...StorageManager.normalizeProfile(player, { ownerId }),
+          isDemo: StorageManager.isDemoPlayer(player)
+        }));
+      if (!claimed.length) return 0;
+      const existingPlayers = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
+      const mergedPlayers = [...existingPlayers];
+      claimed.forEach((player) => {
+        const existingIndex = mergedPlayers.findIndex((candidate) => candidate.id === player.id);
+        if (existingIndex >= 0) mergedPlayers[existingIndex] = player;
+        else mergedPlayers.push(player);
+      });
+      const primary = claimed[0];
+      const legacyRounds = StorageManager.get(STORAGE_KEYS.ROUNDS, []);
+      const legacyPlayerData = {};
+      PLAYER_DATA_KEYS.forEach((key) => {
+        const legacyValue = StorageManager.get(`${key}:${primary.id}`, StorageManager.get(key, null));
+        if (legacyValue !== null) legacyPlayerData[key] = legacyValue;
+      });
+      const writes = [
+        { key: STORAGE_KEYS.LEGACY_CLAIM_OWNER, value: ownerId },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PLAYERS), value: mergedPlayers },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ACTIVE_PLAYER), value: primary.id },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PROFILE), value: primary },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ROUNDS), value: legacyRounds },
+        { key: StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS, primary.id), value: legacyRounds },
+        ...Object.entries(legacyPlayerData).map(([key, value]) => ({
+          key: StorageManager.getPlayerScopedStorageKey(key, primary.id),
+          value
+        }))
+      ];
+      StorageManager.commitFallbackWrites(writes);
+      StorageManager.activePlayerId = primary.id;
+      StorageManager.activeProfile = primary;
+      StorageManager.activeRounds = StorageManager.clone(legacyRounds);
+      StorageManager.playerDataCache = {};
+      PLAYER_DATA_KEYS.forEach((key) => {
+        StorageManager.playerDataCache[key] = StorageManager.clone(
+          legacyPlayerData[key] ?? StorageManager.defaultPlayerData(key)
+        );
+      });
+      StorageManager.unclaimedLegacyCount = 0;
+      return claimed.length;
+    }
+
+    const stores = GOLF_DATABASE.STORES;
+    const allPlayers = await GolfDatabase.getAll(stores.PLAYERS);
+    const legacyPlayers = allPlayers.filter((player) => !player.ownerId);
+    if (!legacyPlayers.length) {
+      StorageManager.unclaimedLegacyCount = 0;
+      return 0;
+    }
+
+    const claimedPlayers = legacyPlayers.map((player) => StorageManager.normalizeDemoIdentity({
+      ...player,
+      ownerId,
+      isDemo: StorageManager.isDemoPlayer(player),
+      legacyUnclaimed: false,
+      claimedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    const activeSetting = {
+      id: StorageManager.activePlayerSettingId(ownerId),
+      value: legacyPlayers[0].id,
+      updatedAt: new Date().toISOString()
+    };
+    await GolfDatabase.claimLegacyWorkspace(ownerId, claimedPlayers, activeSetting);
+    await StorageManager.refreshUnclaimedLegacyCount();
+    await StorageManager.unlockWorkspace(ownerId);
+    return legacyPlayers.length;
+  }
+
+  static async loadActivePlayer(
+    playerId,
+    saveSelection = true,
+    generation = StorageManager.workspaceGeneration,
+    selectionGeneration = StorageManager.playerSelectionGeneration
+  ) {
     if (!StorageManager.persistenceAvailable) return null;
+    const ownerId = StorageManager.requireWorkspace();
     const stores = GOLF_DATABASE.STORES;
     const player = await GolfDatabase.get(stores.PLAYERS, playerId);
-    if (!player) throw new Error('El golfista seleccionado no existe.');
+    if (!player || player.ownerId !== ownerId) throw new Error('El golfista seleccionado no pertenece a esta cuenta.');
 
     const [rounds, playerDataRows] = await Promise.all([
-      GolfDatabase.getPlayerRounds(playerId),
+      GolfDatabase.getPlayerRounds(playerId, ownerId),
       GolfDatabase.getAllByIndex(stores.PLAYER_DATA, 'playerId', playerId)
     ]);
 
+    if (
+      generation !== StorageManager.workspaceGeneration ||
+      selectionGeneration !== StorageManager.playerSelectionGeneration ||
+      ownerId !== StorageManager.workspaceOwnerId
+    ) return null;
+
     StorageManager.activePlayerId = playerId;
-    StorageManager.activeProfile = StorageManager.normalizeProfile(player, { id: playerId });
+    StorageManager.activeProfile = StorageManager.normalizeDemoIdentity(
+      StorageManager.normalizeProfile(player, { id: playerId, ownerId })
+    );
     StorageManager.activeRounds = rounds.map((round) => StorageManager.normalizeRound(round));
     StorageManager.playerDataCache = {};
-    playerDataRows.forEach((row) => {
+    playerDataRows.filter((row) => row.ownerId === ownerId).forEach((row) => {
       StorageManager.playerDataCache[row.key] = StorageManager.clone(row.value);
     });
 
-    StorageManager.set(STORAGE_KEYS.ACTIVE_PLAYER, playerId);
-    StorageManager.set(STORAGE_KEYS.PROFILE, StorageManager.activeProfile);
-    StorageManager.set(STORAGE_KEYS.ROUNDS, StorageManager.activeRounds);
+    StorageManager.setWorkspaceValue(STORAGE_KEYS.ACTIVE_PLAYER, playerId);
+    StorageManager.setWorkspaceValue(STORAGE_KEYS.PROFILE, StorageManager.activeProfile);
+    StorageManager.setWorkspaceValue(STORAGE_KEYS.ROUNDS, StorageManager.activeRounds);
     PLAYER_DATA_KEYS.forEach((key) => {
       if (StorageManager.playerDataCache[key] !== undefined) {
         StorageManager.set(StorageManager.getPlayerScopedStorageKey(key, playerId), StorageManager.playerDataCache[key]);
@@ -347,13 +786,30 @@ class StorageManager {
     });
 
     if (saveSelection) {
-      await GolfDatabase.put(stores.SETTINGS, { id: 'active-player', value: playerId });
+      await GolfDatabase.put(stores.SETTINGS, {
+        id: StorageManager.activePlayerSettingId(ownerId),
+        value: playerId,
+        updatedAt: new Date().toISOString()
+      });
     }
     return StorageManager.clone(StorageManager.activeProfile);
   }
 
   static getActivePlayerId() {
     return StorageManager.activePlayerId;
+  }
+
+  static async ownsPlayer(playerId) {
+    if (!StorageManager.workspaceOwnerId || !playerId) return false;
+    if (StorageManager.activePlayerId === playerId && StorageManager.activeProfile?.ownerId === StorageManager.workspaceOwnerId) {
+      return true;
+    }
+    if (StorageManager.persistenceAvailable) {
+      const player = await GolfDatabase.get(GOLF_DATABASE.STORES.PLAYERS, playerId);
+      return player?.ownerId === StorageManager.workspaceOwnerId;
+    }
+    const players = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
+    return players.some((player) => player.id === playerId && player.ownerId === StorageManager.workspaceOwnerId);
   }
 
   static queueCloudSync(playerId = StorageManager.activePlayerId) {
@@ -363,103 +819,230 @@ class StorageManager {
   }
 
   static async getPlayers() {
+    const ownerId = StorageManager.requireWorkspace();
     if (StorageManager.persistenceAvailable) {
-      const players = await GolfDatabase.getAll(GOLF_DATABASE.STORES.PLAYERS);
+      const players = await GolfDatabase.getAllByIndex(GOLF_DATABASE.STORES.PLAYERS, 'ownerId', ownerId);
       return players
-        .map((player) => StorageManager.normalizeProfile(player, { id: player.id }))
+        .map((player) => StorageManager.normalizeProfile(player, { id: player.id, ownerId }))
+        .map((player) => StorageManager.normalizeDemoIdentity(player))
         .sort((a, b) => a.name.localeCompare(b.name, 'es'));
     }
-    const fallbackPlayers = StorageManager.get(STORAGE_KEYS.PLAYERS, []);
-    const active = StorageManager.getProfile();
-    const players = fallbackPlayers.length ? fallbackPlayers : [active];
-    return players.map((player) => StorageManager.normalizeProfile(player, { id: player.id }));
+    const fallbackPlayers = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
+    return fallbackPlayers
+      .filter((player) => player.ownerId === ownerId)
+      .map((player) => StorageManager.normalizeProfile(player, { id: player.id, ownerId }))
+      .map((player) => StorageManager.normalizeDemoIdentity(player));
+  }
+
+  static async createDemoWorkspace() {
+    const ownerId = StorageManager.requireWorkspace();
+    const existingDemo = (await StorageManager.getPlayers()).find((player) => StorageManager.isDemoPlayer(player));
+    if (existingDemo) {
+      await StorageManager.setActivePlayer(existingDemo.id);
+      return StorageManager.clone(StorageManager.getProfile());
+    }
+
+    const fixture = StorageManager.buildDemoFixture(ownerId);
+    const { player, assessment, goals, notes, rounds, handicapHistory } = fixture;
+    const demoData = {
+      [STORAGE_KEYS.ASSESSMENT]: assessment,
+      [STORAGE_KEYS.GOALS]: goals,
+      [STORAGE_KEYS.NOTES]: notes,
+      [STORAGE_KEYS.HANDICAP_HISTORY]: handicapHistory
+    };
+
+    if (StorageManager.persistenceAvailable) {
+      const now = new Date().toISOString();
+      const playerDataRows = Object.entries(demoData)
+        .filter(([key]) => key !== STORAGE_KEYS.HANDICAP_HISTORY)
+        .map(([key, value]) => ({
+          id: `${player.id}:${key}`,
+          playerId: player.id,
+          ownerId,
+          key,
+          value: StorageManager.clone(value),
+          updatedAt: now
+        }));
+      await GolfDatabase.createPlayerBundle({
+        player,
+        handicapRecords: handicapHistory,
+        playerDataRows,
+        rounds,
+        activeSetting: {
+          id: StorageManager.activePlayerSettingId(ownerId),
+          value: player.id,
+          updatedAt: now
+        }
+      });
+      await StorageManager.loadActivePlayer(
+        player.id,
+        false,
+        StorageManager.workspaceGeneration,
+        ++StorageManager.playerSelectionGeneration
+      );
+      return StorageManager.clone(StorageManager.activeProfile);
+    }
+
+    const players = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
+    players.push(player);
+    const playerDataCache = {};
+    PLAYER_DATA_KEYS.forEach((key) => {
+      playerDataCache[key] = StorageManager.clone(demoData[key] ?? StorageManager.defaultPlayerData(key));
+    });
+    StorageManager.commitFallbackWrites([
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PLAYERS), value: players },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PROFILE), value: player },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ACTIVE_PLAYER), value: player.id },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ROUNDS), value: rounds },
+      { key: StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS, player.id), value: rounds },
+      ...PLAYER_DATA_KEYS.map((key) => ({
+        key: StorageManager.getPlayerScopedStorageKey(key, player.id),
+        value: playerDataCache[key]
+      }))
+    ]);
+    StorageManager.activePlayerId = player.id;
+    StorageManager.activeProfile = StorageManager.clone(player);
+    StorageManager.activeRounds = StorageManager.clone(rounds);
+    StorageManager.playerDataCache = playerDataCache;
+    return StorageManager.clone(player);
   }
 
   static async createPlayer(profileData) {
-    const player = StorageManager.normalizeProfile(profileData, { id: StorageManager.makeId('player') });
+    const ownerId = StorageManager.requireWorkspace();
+    const player = StorageManager.normalizeProfile(profileData, {
+      id: StorageManager.makeId('player'),
+      ownerId
+    });
+    StorageManager.validateProfile(player, { requireHandicap: true });
     if (StorageManager.persistenceAvailable) {
-      await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYERS, player);
-      await GolfDatabase.put(GOLF_DATABASE.STORES.HANDICAP_HISTORY, {
-        id: StorageManager.makeId('hcp'),
-        playerId: player.id,
-        date: new Date().toISOString().split('T')[0],
-        handicap: player.handicap,
-        source: 'Alta de jugador',
-        notes: 'Hándicap informado al crear el perfil.',
-        createdAt: new Date().toISOString()
-      });
-      await StorageManager.loadActivePlayer(player.id);
+      const handicapRecord = StorageManager.optionalNumber(player.handicap) !== null
+        ? {
+          id: StorageManager.makeId('hcp'),
+          playerId: player.id,
+          ownerId,
+          date: StorageManager.localDateISO(),
+          handicap: player.handicap,
+          source: 'Alta de jugador',
+          notes: 'Hándicap informado al crear el perfil.',
+          createdAt: new Date().toISOString()
+        }
+        : null;
+      await GolfDatabase.savePlayerProfile(player, handicapRecord);
+      try {
+        await StorageManager.setActivePlayer(player.id);
+      } catch (selectionError) {
+        // La ficha ya quedó guardada de forma atómica. Un fallo secundario al
+        // recordar la selección no debe invitar a crearla nuevamente.
+        console.warn('La ficha se creó, pero no se pudo recordar la selección:', selectionError);
+        StorageManager.activePlayerId = player.id;
+        StorageManager.activeProfile = player;
+        StorageManager.activeRounds = [];
+        StorageManager.playerDataCache = {};
+      }
       StorageManager.queueCloudSync(player.id);
       return player;
     }
 
-    const players = StorageManager.get(STORAGE_KEYS.PLAYERS, []);
+    const players = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
     players.push(player);
-    StorageManager.set(STORAGE_KEYS.PLAYERS, players);
+    StorageManager.commitFallbackWrites([
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PLAYERS), value: players },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PROFILE), value: player },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ACTIVE_PLAYER), value: player.id },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ROUNDS), value: [] },
+      { key: StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS, player.id), value: [] }
+    ]);
     StorageManager.activePlayerId = player.id;
     StorageManager.activeProfile = player;
     StorageManager.activeRounds = [];
     StorageManager.playerDataCache = {};
-    StorageManager.set(STORAGE_KEYS.PROFILE, player);
-    StorageManager.set(STORAGE_KEYS.ACTIVE_PLAYER, player.id);
-    StorageManager.set(STORAGE_KEYS.ROUNDS, []);
     StorageManager.queueCloudSync(player.id);
     return player;
   }
 
   static async setActivePlayer(playerId) {
-    if (StorageManager.persistenceAvailable) return StorageManager.loadActivePlayer(playerId);
+    const selectionGeneration = ++StorageManager.playerSelectionGeneration;
+    if (StorageManager.persistenceAvailable) {
+      return StorageManager.loadActivePlayer(
+        playerId,
+        true,
+        StorageManager.workspaceGeneration,
+        selectionGeneration
+      );
+    }
     const players = await StorageManager.getPlayers();
     const player = players.find((candidate) => candidate.id === playerId);
     if (!player) throw new Error('El golfista seleccionado no existe.');
-    StorageManager.activePlayerId = player.id;
-    StorageManager.activeProfile = player;
-    StorageManager.activeRounds = StorageManager.get(
+    if (selectionGeneration !== StorageManager.playerSelectionGeneration) return null;
+    const rounds = StorageManager.get(
       StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS, player.id),
       []
     );
-    StorageManager.set(STORAGE_KEYS.ACTIVE_PLAYER, player.id);
-    StorageManager.set(STORAGE_KEYS.PROFILE, player);
-    StorageManager.set(STORAGE_KEYS.ROUNDS, StorageManager.activeRounds);
+    const playerDataCache = {};
+    PLAYER_DATA_KEYS.forEach((key) => {
+      playerDataCache[key] = StorageManager.get(
+        StorageManager.getPlayerScopedStorageKey(key, player.id),
+        StorageManager.defaultPlayerData(key)
+      );
+    });
+    StorageManager.commitFallbackWrites([
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ACTIVE_PLAYER), value: player.id },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PROFILE), value: player },
+      { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ROUNDS), value: rounds }
+    ]);
+    StorageManager.activePlayerId = player.id;
+    StorageManager.activeProfile = player;
+    StorageManager.activeRounds = rounds;
+    StorageManager.playerDataCache = playerDataCache;
     return StorageManager.clone(player);
   }
 
   static getProfile() {
-    return StorageManager.clone(
-      StorageManager.activeProfile || StorageManager.normalizeProfile(StorageManager.get(STORAGE_KEYS.PROFILE, DEFAULT_PROFILE))
-    );
+    if (!StorageManager.workspaceOwnerId || !StorageManager.activeProfile) return null;
+    return StorageManager.clone(StorageManager.activeProfile);
   }
 
   static async saveProfile(profile, options = {}) {
-    const previous = StorageManager.activeProfile || StorageManager.getProfile();
+    const ownerId = StorageManager.requireWorkspace();
+    const previous = StorageManager.activeProfile;
+    if (!previous) throw new Error('Primero seleccioná un golfista.');
     const player = StorageManager.normalizeProfile(profile, {
-      id: profile.id || previous.id || StorageManager.activePlayerId
+      id: profile.id || previous.id || StorageManager.activePlayerId,
+      ownerId
     });
-    StorageManager.activePlayerId = player.id;
-    StorageManager.activeProfile = player;
-    StorageManager.set(STORAGE_KEYS.PROFILE, player);
+    StorageManager.validateProfile(player);
+    if (player.id !== previous.id || player.ownerId !== ownerId) throw new Error('La ficha no pertenece a este espacio.');
 
     if (StorageManager.persistenceAvailable) {
-      await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYERS, player);
-      const handicapChanged = Number(previous.handicap) !== Number(player.handicap);
-      if (options.recordHandicap !== false && handicapChanged) {
-        await GolfDatabase.put(GOLF_DATABASE.STORES.HANDICAP_HISTORY, {
+      const previousHandicap = StorageManager.optionalNumber(previous.handicap);
+      const nextHandicap = StorageManager.optionalNumber(player.handicap);
+      const handicapChanged = previousHandicap !== nextHandicap;
+      const handicapRecord = options.recordHandicap !== false && handicapChanged && nextHandicap !== null
+        ? {
           id: StorageManager.makeId('hcp'),
           playerId: player.id,
-          date: options.handicapDate || new Date().toISOString().split('T')[0],
+          ownerId,
+          date: options.handicapDate || StorageManager.localDateISO(),
           handicap: player.handicap,
           source: options.handicapSource || 'Actualización de perfil',
           notes: options.handicapNotes || '',
           createdAt: new Date().toISOString()
-        });
-      }
+        }
+        : null;
+      await GolfDatabase.savePlayerProfile(player, handicapRecord);
     } else {
-      const players = StorageManager.get(STORAGE_KEYS.PLAYERS, []);
+      const players = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
       const index = players.findIndex((candidate) => candidate.id === player.id);
       if (index >= 0) players[index] = player;
       else players.push(player);
-      StorageManager.set(STORAGE_KEYS.PLAYERS, players);
+      StorageManager.commitFallbackWrites([
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PLAYERS), value: players },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PROFILE), value: player }
+      ]);
     }
+    StorageManager.activePlayerId = player.id;
+    StorageManager.activeProfile = player;
+    if (StorageManager.persistenceAvailable) StorageManager.setWorkspaceValue(STORAGE_KEYS.PROFILE, player);
     StorageManager.queueCloudSync(player.id);
     return StorageManager.clone(player);
   }
@@ -470,21 +1053,44 @@ class StorageManager {
     return StorageManager.clone(fallback);
   }
 
-  static async savePlayerData(key, value) {
+  static async getPlayerDataFor(playerId, key, defaultValue) {
+    const fallback = defaultValue === undefined ? StorageManager.defaultPlayerData(key) : defaultValue;
+    if (!playerId || !(await StorageManager.ownsPlayer(playerId))) return StorageManager.clone(fallback);
+    if (playerId === StorageManager.activePlayerId) return StorageManager.getPlayerData(key, fallback);
+    if (StorageManager.persistenceAvailable) {
+      const row = await GolfDatabase.get(GOLF_DATABASE.STORES.PLAYER_DATA, `${playerId}:${key}`);
+      return StorageManager.clone(row?.value ?? fallback);
+    }
+    return StorageManager.get(StorageManager.getPlayerScopedStorageKey(key, playerId), fallback);
+  }
+
+  static async savePlayerDataFor(playerId, key, value) {
+    const ownerId = StorageManager.requireWorkspace();
+    if (!playerId || !(await StorageManager.ownsPlayer(playerId))) {
+      throw new Error('El golfista ya no está disponible en este espacio.');
+    }
     const cloned = StorageManager.clone(value);
-    StorageManager.playerDataCache[key] = cloned;
-    StorageManager.set(StorageManager.getPlayerScopedStorageKey(key), cloned);
-    if (StorageManager.persistenceAvailable && StorageManager.activePlayerId) {
+    if (StorageManager.persistenceAvailable) {
       await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYER_DATA, {
-        id: `${StorageManager.activePlayerId}:${key}`,
-        playerId: StorageManager.activePlayerId,
+        id: `${playerId}:${key}`,
+        playerId,
+        ownerId,
         key,
         value: cloned,
         updatedAt: new Date().toISOString()
       });
+    } else if (!StorageManager.set(StorageManager.getPlayerScopedStorageKey(key, playerId), cloned)) {
+      throw new Error('No se pudo guardar en este dispositivo.');
     }
-    StorageManager.queueCloudSync();
+    if (playerId === StorageManager.activePlayerId) StorageManager.playerDataCache[key] = cloned;
+    StorageManager.queueCloudSync(playerId);
     return cloned;
+  }
+
+  static async savePlayerData(key, value) {
+    const playerId = StorageManager.activePlayerId;
+    if (!playerId) throw new Error('Primero seleccioná un golfista.');
+    return StorageManager.savePlayerDataFor(playerId, key, value);
   }
 
   static getAssessment() {
@@ -496,107 +1102,181 @@ class StorageManager {
   }
 
   static getRounds() {
-    const rounds = StorageManager.activeRounds ?? StorageManager.get(STORAGE_KEYS.ROUNDS, DEFAULT_ROUNDS);
+    if (!StorageManager.workspaceOwnerId || !StorageManager.activePlayerId) return [];
+    const rounds = StorageManager.activeRounds ?? [];
     return StorageManager.clone(rounds).sort((a, b) => String(b.date).localeCompare(String(a.date)));
   }
 
   static async saveRounds(rounds) {
+    const ownerId = StorageManager.requireWorkspace();
+    const playerId = StorageManager.activePlayerId;
+    if (!playerId) throw new Error('Primero seleccioná un golfista.');
     const normalized = (rounds || [])
-      .map((round) => StorageManager.normalizeRound({ ...round, playerId: StorageManager.activePlayerId }))
+      .map((round) => StorageManager.normalizeRound({ ...round, playerId, ownerId }))
       .sort((a, b) => String(b.date).localeCompare(String(a.date)));
-    StorageManager.activeRounds = normalized;
-    StorageManager.set(STORAGE_KEYS.ROUNDS, normalized);
-    StorageManager.set(StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS), normalized);
-    if (StorageManager.persistenceAvailable && StorageManager.activePlayerId) {
-      await GolfDatabase.replacePlayerRounds(StorageManager.activePlayerId, normalized);
+    if (StorageManager.persistenceAvailable) {
+      await GolfDatabase.replacePlayerRounds(playerId, normalized, ownerId);
+    } else {
+      StorageManager.commitFallbackWrites([
+        { key: StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS, playerId), value: normalized },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ROUNDS), value: normalized }
+      ]);
     }
-    StorageManager.queueCloudSync();
+    StorageManager.activeRounds = normalized;
+    if (StorageManager.persistenceAvailable) StorageManager.setWorkspaceValue(STORAGE_KEYS.ROUNDS, normalized);
+    StorageManager.queueCloudSync(playerId);
     return StorageManager.clone(normalized);
   }
 
   static async addRound(round) {
+    const ownerId = StorageManager.requireWorkspace();
+    const playerId = StorageManager.activePlayerId;
+    if (!playerId) throw new Error('Primero seleccioná un golfista.');
+    const holes = Array.isArray(round.holes) ? round.holes : [];
+    if (![9, 18].includes(holes.length)) throw new Error('La ronda debe contener 9 o 18 hoyos completos.');
+    const invalidHole = holes.find((hole) => {
+      const strokes = Number(hole.strokes);
+      const putts = Number(hole.putts);
+      const penalty = Number(hole.penalty || 0);
+      return !Number.isInteger(strokes) || strokes < 1 || strokes > 20
+        || !Number.isInteger(putts) || putts < 0 || putts > strokes
+        || !Number.isInteger(penalty) || penalty < 0 || penalty > strokes;
+    });
+    if (invalidHole) throw new Error(`Revisá los datos del hoyo ${invalidHole.hole || ''}.`.trim());
+    if (!String(round.course || '').trim()) throw new Error('Ingresá el nombre del campo.');
     const newRound = StorageManager.normalizeRound({
       ...round,
       id: round.id || StorageManager.makeId('round'),
-      playerId: StorageManager.activePlayerId
+      playerId,
+      ownerId
     });
     const rounds = StorageManager.getRounds();
     rounds.unshift(newRound);
+    if (StorageManager.persistenceAvailable) {
+      await GolfDatabase.saveRound(newRound);
+    } else {
+      StorageManager.commitFallbackWrites([
+        { key: StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS, playerId), value: rounds },
+        { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.ROUNDS), value: rounds }
+      ]);
+    }
     StorageManager.activeRounds = rounds;
-    StorageManager.set(STORAGE_KEYS.ROUNDS, rounds);
-    StorageManager.set(StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.ROUNDS), rounds);
-    if (StorageManager.persistenceAvailable) await GolfDatabase.saveRound(newRound);
-    StorageManager.queueCloudSync();
+    if (StorageManager.persistenceAvailable) StorageManager.setWorkspaceValue(STORAGE_KEYS.ROUNDS, rounds);
+    StorageManager.queueCloudSync(playerId);
     return StorageManager.clone(rounds);
   }
 
   static async getHandicapHistory(playerId = StorageManager.activePlayerId) {
+    StorageManager.requireWorkspace();
+    if (!playerId || !(await StorageManager.ownsPlayer(playerId))) return [];
     if (StorageManager.persistenceAvailable) {
       const history = await GolfDatabase.getAllByIndex(
         GOLF_DATABASE.STORES.HANDICAP_HISTORY,
         'playerId',
         playerId
       );
-      return history.sort((a, b) => {
+      return history.filter((entry) => entry.ownerId === StorageManager.workspaceOwnerId).sort((a, b) => {
         const byDate = String(b.date).localeCompare(String(a.date));
         return byDate || String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
       });
     }
-    return StorageManager.getPlayerData('golfcoach_handicap_history', []);
+    if (playerId === StorageManager.activePlayerId) {
+      return StorageManager.getPlayerData(STORAGE_KEYS.HANDICAP_HISTORY, []);
+    }
+    return StorageManager.get(StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.HANDICAP_HISTORY, playerId), []);
   }
 
   static async addHandicapRecord(record) {
+    const ownerId = StorageManager.requireWorkspace();
     const playerId = record.playerId || StorageManager.activePlayerId;
     const handicap = Number(record.handicap);
-    if (!playerId || !Number.isFinite(handicap) || handicap < -10 || handicap > 54) {
+    if (!playerId || !(await StorageManager.ownsPlayer(playerId)) || !Number.isFinite(handicap) || handicap < -10 || handicap > 54) {
       throw new Error('Ingresá un hándicap válido entre -10 y 54.');
     }
+    const recordDate = record.date || StorageManager.localDateISO();
+    if (!StorageManager.isValidDateISO(recordDate)) throw new Error('Ingresá una fecha válida para el hándicap.');
     const entry = {
       id: record.id || StorageManager.makeId('hcp'),
       playerId,
-      date: record.date || new Date().toISOString().split('T')[0],
+      ownerId,
+      date: recordDate,
       handicap,
       source: record.source || 'Manual',
       notes: String(record.notes || '').trim(),
       createdAt: record.createdAt || new Date().toISOString()
     };
-    if (StorageManager.persistenceAvailable) {
+    const isActivePlayer = playerId === StorageManager.activePlayerId;
+    if (StorageManager.persistenceAvailable && isActivePlayer) {
+      const profile = StorageManager.normalizeProfile({
+        ...StorageManager.getProfile(),
+        handicap
+      }, { id: playerId, ownerId });
+      await GolfDatabase.savePlayerProfile(profile, entry);
+      StorageManager.activeProfile = profile;
+      StorageManager.setWorkspaceValue(STORAGE_KEYS.PROFILE, profile);
+    } else if (StorageManager.persistenceAvailable) {
       await GolfDatabase.put(GOLF_DATABASE.STORES.HANDICAP_HISTORY, entry);
     } else {
       const history = await StorageManager.getHandicapHistory(playerId);
       history.push(entry);
-      await StorageManager.savePlayerData('golfcoach_handicap_history', history);
-    }
-    if (playerId === StorageManager.activePlayerId) {
-      const profile = StorageManager.getProfile();
-      profile.handicap = handicap;
-      await StorageManager.saveProfile(profile, { recordHandicap: false });
+      const writes = [{
+        key: StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.HANDICAP_HISTORY, playerId),
+        value: history
+      }];
+      if (isActivePlayer) {
+        const profile = StorageManager.normalizeProfile({
+          ...StorageManager.getProfile(),
+          handicap
+        }, { id: playerId, ownerId });
+        const players = StorageManager.getWorkspaceValue(STORAGE_KEYS.PLAYERS, []);
+        const profileIndex = players.findIndex((candidate) => candidate.id === playerId);
+        if (profileIndex < 0) throw new Error('La ficha activa ya no existe.');
+        players[profileIndex] = profile;
+        writes.push(
+          { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PLAYERS), value: players },
+          { key: StorageManager.getWorkspaceStorageKey(STORAGE_KEYS.PROFILE), value: profile }
+        );
+        StorageManager.commitFallbackWrites(writes);
+        StorageManager.activeProfile = profile;
+      } else {
+        StorageManager.commitFallbackWrites(writes);
+      }
+      if (isActivePlayer) StorageManager.playerDataCache[STORAGE_KEYS.HANDICAP_HISTORY] = StorageManager.clone(history);
     }
     StorageManager.queueCloudSync(playerId);
     return entry;
   }
 
   static async getTournaments(playerId = StorageManager.activePlayerId) {
+    StorageManager.requireWorkspace();
+    if (!playerId || !(await StorageManager.ownsPlayer(playerId))) return [];
     if (StorageManager.persistenceAvailable) {
       const tournaments = await GolfDatabase.getAllByIndex(
         GOLF_DATABASE.STORES.TOURNAMENTS,
         'playerId',
         playerId
       );
-      return tournaments.sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
+      return tournaments
+        .filter((tournament) => tournament.ownerId === StorageManager.workspaceOwnerId)
+        .sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)));
     }
-    return StorageManager.getPlayerData('golfcoach_tournaments', []);
+    if (playerId === StorageManager.activePlayerId) {
+      return StorageManager.getPlayerData(STORAGE_KEYS.TOURNAMENTS, []);
+    }
+    return StorageManager.get(StorageManager.getPlayerScopedStorageKey(STORAGE_KEYS.TOURNAMENTS, playerId), []);
   }
 
   static async saveTournament(tournament) {
+    const ownerId = StorageManager.requireWorkspace();
     const playerId = tournament.playerId || StorageManager.activePlayerId;
-    if (!playerId) throw new Error('Primero seleccioná un golfista.');
-    const today = new Date().toISOString().split('T')[0];
+    if (!playerId || !(await StorageManager.ownsPlayer(playerId))) throw new Error('Primero seleccioná un golfista.');
+    const today = StorageManager.localDateISO();
     const now = new Date().toISOString();
     const normalized = {
       ...StorageManager.clone(tournament),
       id: tournament.id || StorageManager.makeId('tournament'),
       playerId,
+      ownerId,
       name: String(tournament.name || '').trim(),
       course: String(tournament.course || '').trim(),
       city: String(tournament.city || '').trim(),
@@ -605,13 +1285,23 @@ class StorageManager {
       status: tournament.status || 'Planificado',
       startDate: tournament.startDate || today,
       endDate: tournament.endDate || tournament.startDate || today,
-      position: tournament.position ? Number(tournament.position) : null,
-      totalScore: tournament.totalScore ? Number(tournament.totalScore) : null,
+      position: StorageManager.optionalNumber(tournament.position),
+      totalScore: StorageManager.optionalNumber(tournament.totalScore),
       notes: String(tournament.notes || '').trim(),
       createdAt: tournament.createdAt || now,
       updatedAt: now
     };
     if (!normalized.name) throw new Error('El torneo necesita un nombre.');
+    if (!StorageManager.isValidDateISO(normalized.startDate) || !StorageManager.isValidDateISO(normalized.endDate)) {
+      throw new Error('Revisá las fechas del torneo.');
+    }
+    if (normalized.endDate < normalized.startDate) throw new Error('La fecha de fin no puede ser anterior al inicio.');
+    if (normalized.position !== null && (!Number.isInteger(normalized.position) || normalized.position < 1)) {
+      throw new Error('La posición final debe ser un número entero mayor a cero.');
+    }
+    if (normalized.totalScore !== null && (!Number.isInteger(normalized.totalScore) || normalized.totalScore < 0)) {
+      throw new Error('El score total debe ser un número entero válido.');
+    }
     if (StorageManager.persistenceAvailable) {
       await GolfDatabase.put(GOLF_DATABASE.STORES.TOURNAMENTS, normalized);
     } else {
@@ -619,7 +1309,7 @@ class StorageManager {
       const existingIndex = tournaments.findIndex((item) => item.id === normalized.id);
       if (existingIndex >= 0) tournaments[existingIndex] = normalized;
       else tournaments.push(normalized);
-      await StorageManager.savePlayerData('golfcoach_tournaments', tournaments);
+      await StorageManager.savePlayerDataFor(playerId, STORAGE_KEYS.TOURNAMENTS, tournaments);
     }
     StorageManager.queueCloudSync(playerId);
     return normalized;

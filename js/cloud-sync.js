@@ -73,8 +73,32 @@ class CloudSync {
     button.hidden = !enabled;
     if (!enabled) return;
 
-    button.textContent = '☁️';
+    const icon = button.querySelector('.topbar-action-icon');
+    if (icon) icon.textContent = '☁️';
+    else button.textContent = '☁️';
     button.title = 'Respaldo y sincronización cloud';
+    button.setAttribute('aria-label', button.title);
+    CloudSync.refreshButtonState(button).catch((error) => {
+      console.warn('No se pudo actualizar el indicador de sincronización:', error);
+    });
+  }
+
+  static async refreshButtonState(button = document.getElementById('cloud-sync-btn')) {
+    if (!button || !CloudSync.isCoachReady()) return;
+    const pending = await CloudSync.pendingCount();
+    let badge = button.querySelector('.sync-button-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'sync-button-badge';
+      badge.setAttribute('aria-hidden', 'true');
+      button.append(badge);
+    }
+    badge.textContent = pending > 9 ? '9+' : String(pending);
+    badge.hidden = pending === 0;
+    button.classList.toggle('has-sync-pending', pending > 0);
+    button.title = pending
+      ? `Respaldo cloud: ${pending} cambio${pending === 1 ? '' : 's'} pendiente${pending === 1 ? '' : 's'}`
+      : 'Respaldo cloud actualizado';
     button.setAttribute('aria-label', button.title);
   }
 
@@ -93,6 +117,12 @@ class CloudSync {
     });
   }
 
+  static async getLastResult(ownerId = CloudSync.currentOwnerId()) {
+    if (!ownerId || !window.GolfDatabase?.isAvailable) return null;
+    const setting = await GolfDatabase.get(GOLF_DATABASE.STORES.SETTINGS, CloudSync.lastSyncId(ownerId));
+    return setting?.value || null;
+  }
+
   static async getJobs(ownerId = CloudSync.currentOwnerId()) {
     if (!ownerId || !window.GolfDatabase?.isAvailable) return [];
     return GolfDatabase.getAllByIndex(GOLF_DATABASE.STORES.SYNC_OUTBOX, 'ownerId', ownerId);
@@ -105,12 +135,19 @@ class CloudSync {
   static async queueLocalPlayer(playerId) {
     const ownerId = CloudSync.currentOwnerId();
     if (!ownerId || !playerId || !(await CloudSync.isEnabled(ownerId))) return false;
-    await CloudSync.queuePlayer(ownerId, playerId);
+    if (StorageManager.workspaceOwnerId !== ownerId || !(await StorageManager.ownsPlayer(playerId))) {
+      console.warn('Se omitió un respaldo porque la ficha no pertenece al workspace autenticado.');
+      return false;
+    }
+    const queued = await CloudSync.queuePlayer(ownerId, playerId);
+    if (!queued) return false;
     CloudSync.scheduleFlush();
     return true;
   }
 
   static async queuePlayer(ownerId, playerId) {
+    const player = await GolfDatabase.get(GOLF_DATABASE.STORES.PLAYERS, playerId);
+    if (!player || player.ownerId !== ownerId || StorageManager.isDemoPlayer(player)) return false;
     const id = CloudSync.jobId(ownerId, playerId);
     const existing = await GolfDatabase.get(GOLF_DATABASE.STORES.SYNC_OUTBOX, id);
     const now = new Date().toISOString();
@@ -124,6 +161,7 @@ class CloudSync {
       attempts: existing?.attempts || 0,
       lastError: null
     });
+    return true;
   }
 
   static scheduleFlush() {
@@ -141,10 +179,12 @@ class CloudSync {
       return;
     }
 
-    const [enabled, pending] = await Promise.all([
+    const [enabled, jobs, lastResult] = await Promise.all([
       CloudSync.isEnabled(),
-      CloudSync.pendingCount()
+      CloudSync.getJobs(),
+      CloudSync.getLastResult()
     ]);
+    const pending = jobs.length;
     const actionLabel = enabled ? 'Sincronizar ahora' : 'Activar respaldo y sincronizar';
     const description = enabled
       ? 'Los cambios se guardan primero en este dispositivo y se respaldan de forma segura cuando haya conexión.'
@@ -163,7 +203,11 @@ class CloudSync {
       <div class="offline-info-card" style="margin-top:1rem;">
         <span>🔒</span><span>Solo tu cuenta de entrenador y los golfistas asignados pueden acceder a estos datos. La app sigue funcionando sin conexión.</span>
       </div>
-      <div id="cloud-sync-status" role="status" aria-live="polite" style="min-height:1.25rem; font-size:0.84rem; color:var(--text-muted); margin-top:1rem;">${pending ? `${pending} ficha${pending === 1 ? '' : 's'} pendiente${pending === 1 ? '' : 's'} de respaldo.` : 'No hay cambios pendientes.'}</div>
+      <div id="cloud-sync-status" class="sync-status-panel ${lastResult?.failed ? 'error' : ''}" role="status" aria-live="polite">${lastResult?.failed
+        ? `${pending || lastResult.failed} ficha${(pending || lastResult.failed) === 1 ? '' : 's'} pendiente${(pending || lastResult.failed) === 1 ? '' : 's'}. El último intento no pudo completarse; podés reintentar sin perder los datos locales.`
+        : pending
+          ? `${pending} ficha${pending === 1 ? '' : 's'} pendiente${pending === 1 ? '' : 's'} de respaldo.`
+          : 'No hay cambios pendientes. El respaldo está actualizado.'}</div>
       <button class="btn btn-primary" id="cloud-sync-now-btn" style="width:100%; min-height:46px; margin-top:0.75rem;" onclick="CloudSync.syncAllLocalData()">${actionLabel}</button>
     `);
   }
@@ -172,11 +216,7 @@ class CloudSync {
     const status = document.getElementById('cloud-sync-status');
     if (!status) return;
     status.textContent = message;
-    status.style.color = type === 'error'
-      ? '#ef9a9a'
-      : type === 'success'
-        ? 'var(--primary-300)'
-        : 'var(--text-muted)';
+    status.className = `sync-status-panel ${type === 'neutral' ? '' : type}`.trim();
   }
 
   static async syncAllLocalData() {
@@ -195,34 +235,36 @@ class CloudSync {
       return;
     }
 
-    if (button) {
-      button.disabled = true;
-      button.textContent = 'Sincronizando…';
-    }
+    GolfForm.setBusy(button, true, 'Sincronizando…');
     CloudSync.setModalStatus('Preparando las fichas locales…');
 
     try {
       await CloudSync.setEnabled(ownerId, true);
-      const players = await StorageManager.getPlayers();
+      const players = (await StorageManager.getPlayers())
+        .filter((player) => !StorageManager.isDemoPlayer(player));
       for (const player of players) {
         await CloudSync.queuePlayer(ownerId, player.id);
       }
 
       const result = await CloudSync.flush();
       if (result.failed > 0) {
-        CloudSync.setModalStatus(`Se respaldaron ${result.synced} ficha${result.synced === 1 ? '' : 's'}; quedaron ${result.failed} para reintentar.`, 'error');
+        const message = `Se respaldaron ${result.synced} ficha${result.synced === 1 ? '' : 's'}; quedaron ${result.pending || result.failed} para reintentar. Tus datos locales están seguros.`;
+        CloudSync.setModalStatus(message, 'error');
+        window.PWAEngine?.reportSyncIssue?.(message);
       } else {
-        CloudSync.setModalStatus(`✅ Respaldo actualizado: ${result.synced} ficha${result.synced === 1 ? '' : 's'} sincronizada${result.synced === 1 ? '' : 's'}.`, 'success');
-        AuthEngine.toast('☁️ Datos respaldados en GolfCoach.');
+        CloudSync.setModalStatus(`Respaldo actualizado: ${result.synced} ficha${result.synced === 1 ? '' : 's'} sincronizada${result.synced === 1 ? '' : 's'}.`, 'success');
+        window.PWAEngine?.clearSyncIssue?.();
+        App.showSaveConfirmation('Respaldo cloud actualizado', 'Los cambios ya están disponibles para las cuentas vinculadas.');
       }
     } catch (error) {
       console.warn('No se pudo completar el respaldo cloud:', error);
-      CloudSync.setModalStatus(CloudSync.readableError(error), 'error');
+      const message = CloudSync.readableError(error);
+      CloudSync.setModalStatus(message, 'error');
+      window.PWAEngine?.reportSyncIssue?.(message);
     } finally {
-      if (button) {
-        button.disabled = false;
-        button.textContent = 'Sincronizar ahora';
-      }
+      GolfForm.setBusy(button, false);
+      if (button) button.textContent = 'Sincronizar ahora';
+      CloudSync.updateButton();
     }
   }
 
@@ -243,7 +285,7 @@ class CloudSync {
   static async runFlush(ownerId) {
     const jobs = (await CloudSync.getJobs(ownerId))
       .sort((a, b) => String(a.queuedAt).localeCompare(String(b.queuedAt)));
-    const result = { synced: 0, failed: 0, pending: jobs.length };
+    const result = { synced: 0, failed: 0, pending: jobs.length, lastError: null };
 
     for (const job of jobs) {
       if (AuthEngine.user?.id !== ownerId || !AuthEngine.isCoach()) break;
@@ -252,7 +294,9 @@ class CloudSync {
         await GolfDatabase.delete(GOLF_DATABASE.STORES.SYNC_OUTBOX, job.id);
         result.synced += 1;
       } catch (error) {
+        console.warn('Falló el respaldo de una ficha:', error);
         result.failed += 1;
+        result.lastError = CloudSync.readableError(error);
         await GolfDatabase.put(GOLF_DATABASE.STORES.SYNC_OUTBOX, {
           ...job,
           attempts: Number(job.attempts || 0) + 1,
@@ -269,26 +313,37 @@ class CloudSync {
       value: result,
       updatedAt: new Date().toISOString()
     });
+    if (result.failed > 0) {
+      window.PWAEngine?.reportSyncIssue?.(result.lastError || 'Quedaron cambios pendientes de respaldo.');
+    } else if (result.pending === 0) {
+      window.PWAEngine?.clearSyncIssue?.();
+    }
     return result;
   }
 
   static async syncPlayerSnapshot(localPlayerId, ownerId) {
     const stores = GOLF_DATABASE.STORES;
     const player = await GolfDatabase.get(stores.PLAYERS, localPlayerId);
-    if (!player) return;
+    if (!player || StorageManager.isDemoPlayer(player)) return;
+    if (player.ownerId !== ownerId || StorageManager.workspaceOwnerId !== ownerId) {
+      throw new Error('La ficha local no pertenece a la cuenta autenticada.');
+    }
 
     const remotePlayerId = await CloudSync.upsertPlayer(player, ownerId);
     const [history, tournaments, rounds, documents] = await Promise.all([
       GolfDatabase.getAllByIndex(stores.HANDICAP_HISTORY, 'playerId', localPlayerId),
       GolfDatabase.getAllByIndex(stores.TOURNAMENTS, 'playerId', localPlayerId),
-      GolfDatabase.getPlayerRounds(localPlayerId),
+      GolfDatabase.getPlayerRounds(localPlayerId, ownerId),
       GolfDatabase.getAllByIndex(stores.PLAYER_DATA, 'playerId', localPlayerId)
     ]);
+    const ownedHistory = history.filter((entry) => entry.ownerId === ownerId);
+    const ownedTournaments = tournaments.filter((entry) => entry.ownerId === ownerId);
+    const ownedDocuments = documents.filter((entry) => entry.ownerId === ownerId);
 
-    await CloudSync.syncHandicapHistory(history, remotePlayerId);
-    const tournamentIds = await CloudSync.syncTournaments(tournaments, remotePlayerId);
+    await CloudSync.syncHandicapHistory(ownedHistory, remotePlayerId);
+    const tournamentIds = await CloudSync.syncTournaments(ownedTournaments, remotePlayerId);
     await CloudSync.syncRounds(rounds, remotePlayerId, tournamentIds);
-    await CloudSync.syncDocuments(documents, remotePlayerId);
+    await CloudSync.syncDocuments(ownedDocuments, remotePlayerId);
   }
 
   static async upsertPlayer(player, ownerId) {
@@ -346,7 +401,7 @@ class CloudSync {
         player_id: remotePlayerId,
         client_record_id: String(record.id),
         handicap_index: CloudSync.decimalInRange(record.handicap, -10, 54, 1),
-        effective_date: CloudSync.dateOrNull(record.date) || new Date().toISOString().slice(0, 10),
+        effective_date: CloudSync.dateOrNull(record.date) || GolfUtils.localDateISO(),
         source: CloudSync.handicapSource(record.source),
         is_current: index === 0,
         notes: CloudSync.nullableText(record.notes)
@@ -361,7 +416,7 @@ class CloudSync {
   static async syncTournaments(tournaments, remotePlayerId) {
     const remoteIds = new Map();
     for (const tournament of tournaments) {
-      const startDate = CloudSync.dateOrNull(tournament.startDate) || new Date().toISOString().slice(0, 10);
+      const startDate = CloudSync.dateOrNull(tournament.startDate) || GolfUtils.localDateISO();
       const endDate = CloudSync.dateOrNull(tournament.endDate) || startDate;
       const payload = {
         player_id: remotePlayerId,
@@ -426,7 +481,7 @@ class CloudSync {
         client_record_id: String(round.id),
         tournament_id: remoteTournamentId,
         round_number: remoteTournamentId ? (roundNumbers.get(round.id) || 1) : 1,
-        played_on: CloudSync.dateOrNull(round.date) || new Date().toISOString().slice(0, 10),
+        played_on: CloudSync.dateOrNull(round.date) || GolfUtils.localDateISO(),
         course_name: CloudSync.text(round.course, 'Club de Golf'),
         kind: CloudSync.roundKind(round.kind),
         status: 'completed',
@@ -483,7 +538,7 @@ class CloudSync {
         strokes,
         putts: CloudSync.integerInRange(hole.putts, 0, strokes),
         penalty_strokes: CloudSync.integerInRange(hole.penalty, 0, strokes) || 0,
-        fairway_hit: par > 3 ? Boolean(hole.fir) : null,
+        fairway_hit: par > 3 && typeof hole.fir === 'boolean' ? hole.fir : null,
         green_in_regulation: typeof hole.gir === 'boolean' ? hole.gir : null,
         notes: CloudSync.nullableText(hole.notes)
       };
@@ -602,17 +657,31 @@ class CloudSync {
     return 'other';
   }
 
-  static readableError(error) {
+  static errorKind(error) {
+    const code = String(error?.code || '').toUpperCase();
+    const status = Number(error?.status || error?.statusCode || 0);
     const message = String(error?.message || error || '').toLowerCase();
-    if (AuthEngine.isNetworkError?.(error)) return 'No se pudo conectar. El respaldo quedó en cola para reintentar.';
-    if (message.includes('row-level security') || message.includes('permission denied')) {
+    if (navigator.onLine === false || AuthEngine.isNetworkError?.(error) || /^PGRST00[0-3]$/.test(code) || /^08/.test(code) || [408, 503, 504, 520].includes(status)) return 'network';
+    if (code === '42501' || status === 401 || status === 403 || message.includes('row-level security') || message.includes('permission denied')) return 'permission';
+    if (code === '23505' || status === 409 || message.includes('duplicate') || message.includes('unique')) return 'duplicate';
+    return 'unknown';
+  }
+
+  static readableError(error) {
+    const kind = CloudSync.errorKind(error);
+    if (kind === 'network') return 'No se pudo conectar con GolfCoach. El respaldo quedó en cola y se reintentará cuando haya conexión.';
+    if (kind === 'permission') {
       return 'Tu cuenta no tiene permiso para respaldar esta ficha.';
     }
-    if (message.includes('duplicate') || message.includes('unique')) {
+    if (kind === 'duplicate') {
       return 'Hay un dato duplicado que necesita revisión antes de respaldarse.';
     }
     return 'No se pudo completar el respaldo. Tus datos locales no se modificaron.';
   }
 }
+
+window.addEventListener('online', () => {
+  if (CloudSync.isCoachReady()) CloudSync.scheduleFlush();
+});
 
 window.CloudSync = CloudSync;

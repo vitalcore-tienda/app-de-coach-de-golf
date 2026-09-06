@@ -14,6 +14,13 @@ class PlayerPortal {
   static coachContext = null;
   static identityKey = null;
   static loadGeneration = 0;
+  static currentSection = 'today';
+  static sectionTargets = Object.freeze({
+    today: 'player-portal-today',
+    plan: 'player-portal-plan',
+    progress: 'player-portal-progress',
+    messages: 'player-portal-messages-card'
+  });
 
   static isPlayerAccount() {
     return Boolean(AuthEngine.user?.id && AuthEngine.profile?.account_role === 'player');
@@ -21,6 +28,38 @@ class PlayerPortal {
 
   static isIdentityPending() {
     return Boolean(AuthEngine.user?.id && !AuthEngine.profile);
+  }
+
+  static setPlayerNavigationVisible(visible) {
+    const navigation = document.getElementById('player-bottom-nav');
+    if (navigation) navigation.hidden = !visible;
+  }
+
+  static updatePlayerNavigation(sectionId = PlayerPortal.currentSection) {
+    if (!PlayerPortal.sectionTargets[sectionId]) sectionId = 'today';
+    PlayerPortal.currentSection = sectionId;
+    document.querySelectorAll('#player-bottom-nav [data-player-section]').forEach((item) => {
+      const active = item.dataset.playerSection === sectionId;
+      item.classList.toggle('active', active);
+      if (active) item.setAttribute('aria-current', 'page');
+      else item.removeAttribute('aria-current');
+    });
+    const titles = { today: 'Hoy', plan: 'Mi plan', progress: 'Progreso', messages: 'Mensajes' };
+    const title = document.getElementById('current-page-title');
+    if (title && PlayerPortal.active) title.textContent = titles[sectionId];
+    if (PlayerPortal.active) GolfA11y.announce(`Portal del golfista. Sección ${titles[sectionId]}`);
+  }
+
+  static navigateToSection(sectionId) {
+    if (!PlayerPortal.active || !PlayerPortal.sectionTargets[sectionId]) return false;
+    const target = document.getElementById(PlayerPortal.sectionTargets[sectionId]);
+    if (!target) return false;
+    PlayerPortal.updatePlayerNavigation(sectionId);
+    target.scrollIntoView({
+      behavior: GolfA11y.scrollBehavior(),
+      block: 'start'
+    });
+    return true;
   }
 
   static cacheId(userId = AuthEngine.user?.id) {
@@ -36,6 +75,8 @@ class PlayerPortal {
       PlayerPortal.loadGeneration += 1;
       PlayerPortal.loadPromise = null;
       PlayerPortal.data = null;
+      PlayerPortal.coachContext = null;
+      PlayerPortal.currentSection = 'today';
     }
     return { userId, generation: PlayerPortal.loadGeneration };
   }
@@ -49,8 +90,8 @@ class PlayerPortal {
   }
 
   static closeCoachOverlays() {
-    document.getElementById('global-modal')?.classList.remove('active');
-    document.getElementById('mobile-drawer-overlay')?.classList.remove('active');
+    window.App?.closeModal?.();
+    window.App?.closeMobileDrawer?.();
   }
 
   static async onAuthStateChanged() {
@@ -76,12 +117,20 @@ class PlayerPortal {
 
   static activate(identityContext = PlayerPortal.syncIdentityContext()) {
     PlayerPortal.active = true;
+    PlayerPortal.currentSection = 'today';
+    PlayerPortal.setPlayerNavigationVisible(false);
     PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
-    document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
-    document.getElementById('player-portal-panel')?.classList.add('active');
+    document.querySelectorAll('.view-panel').forEach((panel) => {
+      panel.classList.remove('active');
+      panel.setAttribute('aria-hidden', 'true');
+    });
+    const playerPanel = document.getElementById('player-portal-panel');
+    playerPanel?.classList.add('active');
+    playerPanel?.setAttribute('aria-hidden', 'false');
     const title = document.getElementById('current-page-title');
-    if (title) title.textContent = 'Mi golf';
+    if (title) title.textContent = 'Hoy';
+    GolfA11y.announce('Portal del golfista. Sección Hoy');
     PlayerPortal.renderLoading();
     PlayerPortal.load({ identityContext }).catch((error) => {
       console.warn('No se pudo preparar el portal del golfista:', error);
@@ -92,12 +141,19 @@ class PlayerPortal {
     PlayerPortal.active = true;
     PlayerPortal.data = null;
     PlayerPortal.loadPromise = null;
+    PlayerPortal.setPlayerNavigationVisible(false);
     PlayerPortal.closeCoachOverlays();
     document.body.classList.add('player-portal-active');
-    document.querySelectorAll('.view-panel').forEach((panel) => panel.classList.remove('active'));
-    document.getElementById('player-portal-panel')?.classList.add('active');
+    document.querySelectorAll('.view-panel').forEach((panel) => {
+      panel.classList.remove('active');
+      panel.setAttribute('aria-hidden', 'true');
+    });
+    const playerPanel = document.getElementById('player-portal-panel');
+    playerPanel?.classList.add('active');
+    playerPanel?.setAttribute('aria-hidden', 'false');
     const title = document.getElementById('current-page-title');
     if (title) title.textContent = 'Verificando cuenta';
+    GolfA11y.announce('Verificando el tipo de cuenta');
     PlayerPortal.renderIdentityPending();
   }
 
@@ -123,23 +179,23 @@ class PlayerPortal {
     PlayerPortal.active = false;
     PlayerPortal.data = null;
     PlayerPortal.loadPromise = null;
+    PlayerPortal.coachContext = null;
+    PlayerPortal.currentSection = 'today';
+    PlayerPortal.setPlayerNavigationVisible(false);
     document.body.classList.remove('player-portal-active');
 
     if (!wasActive || !window.App) return;
-    document.getElementById('player-portal-panel')?.classList.remove('active');
+    const playerPanel = document.getElementById('player-portal-panel');
+    playerPanel?.classList.remove('active');
+    playerPanel?.setAttribute('aria-hidden', 'true');
     App.navigateTo('dashboard');
   }
 
   static renderLoading() {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
-    container.innerHTML = `
-      <div class="card portal-account-pending">
-        <div class="card-icon">⛳</div>
-        <h2>Preparando tu espacio de golf</h2>
-        <p style="margin-top:0.55rem;">Cargando tu handicap, entrenamientos y próximos torneos…</p>
-      </div>
-    `;
+    PlayerPortal.setPlayerNavigationVisible(false);
+    container.innerHTML = GolfUI.loading('portal', 'Cargando tu hándicap, entrenamientos y próximos torneos…');
   }
 
   static async load({ force = false, identityContext = null } = {}) {
@@ -324,7 +380,7 @@ class PlayerPortal {
       : '<span class="badge badge-green">Datos protegidos y actualizados</span>';
 
     container.innerHTML = `
-      <div class="card card-gold-glow player-portal-hero">
+      <div class="card card-gold-glow player-portal-hero player-portal-section" id="player-portal-today">
         <div class="player-portal-hero-copy">
           <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">${fromCacheBadge}<span class="badge badge-gold">Mi golf</span></div>
           <h2>Hola, ${PlayerPortal.escapeHTML(player.full_name)}</h2>
@@ -333,7 +389,7 @@ class PlayerPortal {
         <button class="btn btn-secondary player-portal-refresh" id="player-portal-refresh-btn" ${navigator.onLine === false ? 'disabled' : ''}>↻ Actualizar</button>
       </div>
 
-      <div class="grid-4" style="margin-bottom:1.25rem;">
+      <div class="grid-4 layout-section">
         <div class="card stat-card">
           <div class="stat-label">Handicap actual</div>
           <div class="stat-value" style="color:var(--gold-400);">${currentHandicap}</div>
@@ -357,7 +413,7 @@ class PlayerPortal {
       </div>
 
       <div class="player-portal-grid">
-        <div class="card">
+        <div class="card player-portal-section" id="player-portal-plan">
           <div class="card-header">
             <div class="card-title-group"><div class="card-icon">🎯</div><h3 class="card-title">Mis entrenamientos</h3></div>
             <span class="badge badge-gold">${activeAssignments.length} activos</span>
@@ -365,7 +421,7 @@ class PlayerPortal {
           <div class="portal-stack">${PlayerPortal.renderTrainingAssignments(data)}</div>
         </div>
 
-        <div class="card">
+        <div class="card player-portal-section" id="player-portal-progress">
           <div class="card-header">
             <div class="card-title-group"><div class="card-icon">📈</div><h3 class="card-title">Evolución de handicap</h3></div>
           </div>
@@ -390,7 +446,7 @@ class PlayerPortal {
         </div>
       </div>
 
-      <div class="card" style="margin-bottom:1.25rem;">
+      <div class="card layout-section">
         <div class="card-header">
           <div class="card-title-group"><div class="card-icon">📊</div><h3 class="card-title">Resultados y rondas</h3></div>
           <span class="badge badge-blue">${data.rounds.length} registradas</span>
@@ -398,7 +454,7 @@ class PlayerPortal {
         <div class="portal-stack">${PlayerPortal.renderRounds(data.rounds)}</div>
       </div>
 
-      <div class="card" id="player-portal-messages-card">
+      <div class="card player-portal-section" id="player-portal-messages-card">
         <div class="card-header">
           <div class="card-title-group"><div class="card-icon">💬</div><h3 class="card-title">Mensajes con mi entrenador</h3></div>
           <span class="badge badge-green">Privado</span>
@@ -412,11 +468,14 @@ class PlayerPortal {
     `;
 
     PlayerPortal.bindPortalActions(container);
+    PlayerPortal.setPlayerNavigationVisible(true);
+    PlayerPortal.updatePlayerNavigation();
   }
 
   static renderUnlinkedAccount() {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
+    PlayerPortal.setPlayerNavigationVisible(false);
     const email = PlayerPortal.escapeHTML(AuthEngine.user?.email || 'tu correo');
     container.innerHTML = `
       <div class="card portal-account-pending">
@@ -433,6 +492,7 @@ class PlayerPortal {
   static renderError(error) {
     const container = document.getElementById('player-portal-container');
     if (!container) return;
+    PlayerPortal.setPlayerNavigationVisible(false);
     const offline = navigator.onLine === false || String(error?.message || '').includes('offline');
     container.innerHTML = `
       <div class="card portal-account-pending">
@@ -494,7 +554,7 @@ class PlayerPortal {
   static renderHandicapTrend(history, currentHandicap) {
     const points = history.slice(0, 8).reverse();
     if (!points.length && currentHandicap !== null && currentHandicap !== undefined) {
-      points.push({ handicap_index: currentHandicap, effective_date: new Date().toISOString().slice(0, 10) });
+      points.push({ handicap_index: currentHandicap, effective_date: GolfUtils.localDateISO() });
     }
     if (!points.length) return '<div class="portal-empty-state">Todavía no hay registros de handicap.</div>';
 
@@ -515,7 +575,7 @@ class PlayerPortal {
   }
 
   static upcomingTournaments(tournaments) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = GolfUtils.localDateISO();
     return tournaments
       .filter((item) => ['scheduled', 'in_progress'].includes(item.status) && (item.end_date || item.start_date) >= today)
       .sort((a, b) => String(a.start_date).localeCompare(String(b.start_date)));
@@ -535,10 +595,11 @@ class PlayerPortal {
     if (!goals.length) return '<div class="portal-empty-state">Las metas compartidas por tu entrenador aparecerán acá.</div>';
     return goals.slice(0, 8).map((goal) => {
       const progress = Math.max(0, Math.min(100, Number.parseInt(goal?.progress, 10) || 0));
+      const title = PlayerPortal.escapeHTML(goal?.title || 'Meta de entrenamiento');
       return `
         <div class="portal-goal-item">
-          <div class="portal-item-header"><h4>${PlayerPortal.escapeHTML(goal?.title || 'Meta de entrenamiento')}</h4><span class="badge badge-green">${progress}%</span></div>
-          <div class="progress-bar-container" style="margin-top:0.65rem;"><div class="progress-bar-fill" style="width:${progress}%;"></div></div>
+          <div class="portal-item-header"><h4>${title}</h4><span class="badge badge-green">${progress}%</span></div>
+          <div class="progress-bar-container" style="margin-top:0.65rem;" role="progressbar" aria-label="Progreso de la meta ${title}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}"><div class="progress-bar-fill" style="width:${progress}%;"></div></div>
           <div class="portal-item-meta"><span>${PlayerPortal.escapeHTML(goal?.category || 'General')}</span>${goal?.targetDate ? `<span>📅 ${PlayerPortal.formatDate(goal.targetDate)}</span>` : ''}</div>
         </div>
       `;
@@ -614,18 +675,21 @@ class PlayerPortal {
 
   static async updateAssignmentStatus(assignmentId, status, button) {
     if (!PlayerPortal.validUuid(assignmentId) || !['in_progress', 'completed'].includes(status)) return;
-    if (button) button.disabled = true;
+    GolfForm.setBusy(button, true, status === 'completed' ? 'Guardando…' : 'Iniciando…');
     try {
       const { error } = await AuthEngine.client
         .from('training_assignments')
         .update({ status })
         .eq('id', assignmentId);
       if (error) throw error;
-      App.showToast(status === 'completed' ? '✅ Entrenamiento completado.' : '▶ Entrenamiento iniciado.');
+      App.showSaveConfirmation(
+        status === 'completed' ? 'Entrenamiento completado' : 'Entrenamiento iniciado',
+        'Tu entrenador podrá ver este cambio en el seguimiento.'
+      );
       await PlayerPortal.load({ force: true });
     } catch (error) {
       App.showToast(PlayerPortal.readableError(error));
-      if (button) button.disabled = false;
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -641,14 +705,15 @@ class PlayerPortal {
       App.showToast('El mensaje es demasiado largo.');
       return;
     }
-    if (button) button.disabled = true;
+    GolfForm.setBusy(button, true, 'Enviando…');
     try {
       await PlayerPortal.insertMessage(PlayerPortal.data?.player?.id, 'player', body);
       if (input) input.value = '';
       await PlayerPortal.load({ force: true });
+      App.showSaveConfirmation('Mensaje enviado', 'Tu entrenador ya puede verlo en la conversación.');
     } catch (error) {
       App.showToast(PlayerPortal.readableError(error));
-      if (button) button.disabled = false;
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -685,6 +750,79 @@ class PlayerPortal {
     `;
   }
 
+  static async renderCoachMessagesHub() {
+    const container = document.getElementById('messages-container');
+    if (!container) return;
+    if (!window.AuthEngine?.isCoach?.()) {
+      container.innerHTML = '<div class="card portal-account-pending"><div class="card-icon">🔐</div><h2>Acceso del entrenador requerido</h2><p>Ingresá con la cuenta del entrenador para abrir las conversaciones privadas.</p></div>';
+      return;
+    }
+
+    container.innerHTML = GolfUI.loading('messages', 'Cargando conversaciones con golfistas…');
+    try {
+      const players = await StorageManager.getPlayers();
+      if (!players.length) {
+        container.innerHTML = `
+          <div class="card card-gold-glow empty-state-panel">
+            <div class="card-icon">💬</div>
+            <h2>Todavía no hay golfistas</h2>
+            <p style="margin-top:0.45rem; color:var(--text-muted);">Agregá la primera ficha para poder asignar planes y abrir conversaciones privadas.</p>
+            <button class="btn btn-primary" style="margin-top:1rem;" onclick="App.navigateTo('players')">Agregar golfista</button>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = `
+        <div class="card card-gold-glow coach-messages-hero">
+          <div>
+            <span class="badge badge-green">Comunicación privada</span>
+            <h2 style="margin-top:0.55rem;">Mensajes con tus golfistas</h2>
+            <p style="margin-top:0.35rem; color:var(--text-muted); line-height:1.55;">Elegí una ficha para abrir la conversación. Los mensajes se habilitan cuando el golfista está respaldado y vinculado por correo.</p>
+          </div>
+          <button class="btn btn-secondary" onclick="App.navigateTo('players')">Gestionar golfistas</button>
+        </div>
+        <div class="coach-messages-grid">
+          ${players.map((player) => PlayerPortal.renderCoachMessageHubCard(player)).join('')}
+        </div>
+      `;
+
+      container.querySelectorAll('[data-coach-hub-message-id]').forEach((button) => {
+        button.addEventListener('click', () => PlayerPortal.openCoachMessagesModal(button.dataset.coachHubMessageId));
+      });
+    } catch (error) {
+      console.error('No se pudo preparar el centro de mensajes:', error);
+      container.innerHTML = '<div class="card empty-state-panel"><div class="card-icon">⚠️</div><h2>No pudimos cargar las conversaciones</h2><p style="margin-top:0.45rem; color:var(--text-muted);">Tus fichas no se modificaron. Intentá nuevamente.</p></div>';
+    }
+  }
+
+  static renderCoachMessageHubCard(player) {
+    const playerId = PlayerPortal.escapeHTML(player?.id || '');
+    const playerName = PlayerPortal.escapeHTML(player?.name || 'Golfista');
+    const isDemo = StorageManager.isDemoPlayer(player);
+    const linked = PlayerPortal.validUuid(player?.remoteId);
+    const status = isDemo
+      ? { badge: 'badge-gold', label: 'Modo demo · sin nube', description: 'Las demostraciones no admiten mensajes.' }
+      : linked
+        ? { badge: 'badge-green', label: 'Cuenta vinculada', description: 'Conversación privada disponible.' }
+        : { badge: 'badge-blue', label: 'Falta respaldo', description: 'La app te guiará para habilitar los mensajes.' };
+    return `
+      <article class="card coach-message-player-card">
+        <div class="coach-message-player-main">
+          <div class="player-avatar">${PlayerPortal.escapeHTML(String(player?.name || 'G').charAt(0).toUpperCase())}</div>
+          <div style="min-width:0;">
+            <h3>${playerName}</h3>
+            <span class="badge ${status.badge}" style="margin-top:0.4rem;">${status.label}</span>
+            <p>${status.description}</p>
+          </div>
+        </div>
+        <button class="btn ${linked ? 'btn-primary' : 'btn-secondary'}" type="button" ${isDemo ? 'disabled' : `data-coach-hub-message-id="${playerId}"`}>
+          ${isDemo ? 'No disponible' : linked ? 'Abrir conversación' : 'Configurar mensajes'}
+        </button>
+      </article>
+    `;
+  }
+
   static async localPlayer(localPlayerId) {
     const players = await StorageManager.getPlayers();
     return players.find((player) => String(player.id) === String(localPlayerId)) || null;
@@ -716,22 +854,43 @@ class PlayerPortal {
       PlayerPortal.coachContext = { localPlayerId, remotePlayerId: player.remoteId, playerName: player.name };
       const drills = typeof DRILLS_CATALOG !== 'undefined' ? DRILLS_CATALOG : [];
       const options = drills.map((drill) => `<option value="${PlayerPortal.escapeHTML(drill.id)}">${PlayerPortal.escapeHTML(drill.categoryName)} · ${PlayerPortal.escapeHTML(drill.title)}</option>`).join('');
-      const tomorrow = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+      const tomorrow = GolfUtils.localDateISO(new Date(Date.now() + 7 * 86400000));
 
       AuthEngine.renderModal(`
         <div class="modal-handle-bar"></div>
-        <div class="modal-header"><div><span class="badge badge-gold">Plan del golfista</span><h3 style="margin-top:0.3rem;">Asignar a ${PlayerPortal.escapeHTML(player.name)}</h3></div><button class="modal-close" onclick="App.closeModal()">&times;</button></div>
-        <div class="form-group"><label class="form-label" for="coach-training-template">Plantilla de drill</label><select class="form-control" id="coach-training-template"><option value="">Plan personalizado</option>${options}</select></div>
-        <div class="form-group"><label class="form-label" for="coach-training-title">Título *</label><input class="form-control" id="coach-training-title" maxlength="160" placeholder="Ej.: Control de distancia con wedges"></div>
-        <div class="form-group"><label class="form-label" for="coach-training-category">Categoría</label><select class="form-control" id="coach-training-category">${PlayerPortal.trainingCategoryOptions()}</select></div>
-        <div class="form-group"><label class="form-label" for="coach-training-instructions">Indicaciones</label><textarea class="form-control" id="coach-training-instructions" rows="5" maxlength="4000" placeholder="Objetivo, repeticiones y puntos de control…"></textarea></div>
-        <div class="form-group"><label class="form-label" for="coach-training-due-date">Fecha objetivo</label><input class="form-control" id="coach-training-due-date" type="date" value="${tomorrow}"></div>
-        <div id="coach-training-status" role="status" aria-live="polite" style="min-height:1.2rem; color:var(--text-muted); font-size:0.82rem;"></div>
-        <button class="btn btn-primary" id="coach-training-save-btn" style="width:100%;">Asignar entrenamiento</button>
+        <div class="modal-header">
+          <div class="modal-heading">
+            <span class="modal-eyebrow">Plan de entrenamiento</span>
+            <h3 class="modal-title">Asignar entrenamiento</h3>
+            <p class="modal-description">Prepará una tarea clara para ${PlayerPortal.escapeHTML(player.name)} y definí cuándo debería completarla.</p>
+          </div>
+          <button class="modal-close" type="button" onclick="App.closeModal()" aria-label="Cerrar ventana">&times;</button>
+        </div>
+        <form class="app-form" id="coach-training-form" novalidate>
+          <section class="form-section">
+            <div class="form-section-title">Contenido del plan</div>
+            <div class="form-group"><label class="form-label" for="coach-training-template">Usar plantilla</label><select class="form-control" id="coach-training-template"><option value="">Plan personalizado</option>${options}</select><span class="form-hint">Elegir un drill completa automáticamente el título y las indicaciones.</span></div>
+            <div class="form-group"><label class="form-label" for="coach-training-title">Título <span class="form-required" aria-hidden="true">*</span></label><input class="form-control" id="coach-training-title" maxlength="160" placeholder="Ej.: Control de distancia con wedges" data-required-message="Ingresá un título para el entrenamiento." required></div>
+            <div class="form-grid-2">
+              <div class="form-group"><label class="form-label" for="coach-training-category">Categoría</label><select class="form-control" id="coach-training-category">${PlayerPortal.trainingCategoryOptions()}</select></div>
+              <div class="form-group"><label class="form-label" for="coach-training-due-date">Fecha objetivo</label><input class="form-control" id="coach-training-due-date" type="date" value="${tomorrow}"></div>
+            </div>
+            <div class="form-group" style="margin-top:0.8rem;"><label class="form-label" for="coach-training-instructions">Indicaciones</label><textarea class="form-control" id="coach-training-instructions" rows="5" maxlength="4000" placeholder="Objetivo, repeticiones y puntos de control…"></textarea><span class="form-hint">Incluí cantidad de repeticiones, duración y un criterio para darlo por cumplido.</span></div>
+          </section>
+          <div class="form-status" id="coach-training-status" role="status" aria-live="polite"></div>
+          <div class="form-actions">
+            <button class="btn btn-secondary" type="button" onclick="App.closeModal()">Cancelar</button>
+            <button class="btn btn-primary" type="submit" id="coach-training-save-btn">Asignar entrenamiento</button>
+          </div>
+        </form>
       `);
 
       document.getElementById('coach-training-template')?.addEventListener('change', (event) => PlayerPortal.applyDrillTemplate(event.target.value));
-      document.getElementById('coach-training-save-btn')?.addEventListener('click', () => PlayerPortal.saveCoachTraining());
+      document.getElementById('coach-training-form')?.addEventListener('submit', (event) => {
+        event.preventDefault();
+        PlayerPortal.saveCoachTraining();
+      });
+      window.setTimeout(() => document.getElementById('coach-training-title')?.focus(), 0);
     } catch (error) {
       App.showToast(PlayerPortal.readableError(error));
     }
@@ -753,16 +912,22 @@ class PlayerPortal {
     const context = PlayerPortal.coachContext;
     const button = document.getElementById('coach-training-save-btn');
     const status = document.getElementById('coach-training-status');
+    const form = document.getElementById('coach-training-form');
+    if (!GolfForm.validate(form)) {
+      GolfForm.setStatus(status, 'Revisá los campos marcados antes de asignar.', 'error');
+      return;
+    }
     const title = String(document.getElementById('coach-training-title')?.value || '').trim();
     const instructions = String(document.getElementById('coach-training-instructions')?.value || '').trim();
     const category = document.getElementById('coach-training-category')?.value || 'general';
     const dueDate = document.getElementById('coach-training-due-date')?.value || null;
     if (!context || !title) {
-      if (status) status.textContent = 'Ingresá un título para el entrenamiento.';
+      GolfForm.setStatus(status, 'No se pudo identificar el golfista o el entrenamiento.', 'error');
       return;
     }
 
-    if (button) button.disabled = true;
+    GolfForm.setBusy(button, true, 'Asignando…');
+    GolfForm.setStatus(status);
     try {
       const { error } = await AuthEngine.client.from('training_assignments').insert({
         player_id: context.remotePlayerId,
@@ -775,10 +940,10 @@ class PlayerPortal {
       });
       if (error) throw error;
       App.closeModal();
-      App.showToast('🎯 Entrenamiento asignado al golfista.');
+      App.showSaveConfirmation('Entrenamiento asignado', 'El golfista ya puede verlo en su plan.');
     } catch (error) {
-      if (status) status.textContent = PlayerPortal.readableError(error);
-      if (button) button.disabled = false;
+      GolfForm.setStatus(status, PlayerPortal.readableError(error), 'error');
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -790,7 +955,7 @@ class PlayerPortal {
       AuthEngine.renderModal(`
         <div class="modal-handle-bar"></div>
         <div class="modal-header"><div><span class="badge badge-green">Conversación privada</span><h3 style="margin-top:0.3rem;">${PlayerPortal.escapeHTML(player.name)}</h3></div><button class="modal-close" onclick="App.closeModal()">&times;</button></div>
-        <div id="coach-message-thread"><p style="color:var(--text-muted);">Cargando mensajes…</p></div>
+        <div id="coach-message-thread">${GolfUI.loading('thread', 'Cargando mensajes…')}</div>
       `);
       await PlayerPortal.loadCoachMessages();
     } catch (error) {
@@ -837,14 +1002,16 @@ class PlayerPortal {
       input?.focus();
       return;
     }
-    if (button) button.disabled = true;
+    GolfForm.setStatus(status, '', '');
+    GolfForm.setBusy(button, true, 'Enviando…');
     try {
       await PlayerPortal.insertMessage(context.remotePlayerId, 'coach', body);
       if (input) input.value = '';
       await PlayerPortal.loadCoachMessages();
+      App.showSaveConfirmation('Mensaje enviado', 'El golfista ya puede verlo en su portal.');
     } catch (error) {
-      if (status) status.textContent = PlayerPortal.readableError(error);
-      if (button) button.disabled = false;
+      GolfForm.setStatus(status, PlayerPortal.readableError(error), 'error');
+      GolfForm.setBusy(button, false);
     }
   }
 
@@ -927,11 +1094,29 @@ class PlayerPortal {
 
   static readableError(error) {
     const message = String(error?.message || error || '').toLowerCase();
-    if (AuthEngine.isNetworkError?.(error)) return 'No se pudo conectar. Intentá nuevamente cuando tengas conexión.';
-    if (message.includes('row-level security') || message.includes('permission denied')) return 'Tu cuenta no tiene permiso para modificar esta ficha.';
+    const kind = PlayerPortal.errorKind(error);
+    if (kind === 'network') return 'No se pudo conectar ni sincronizar este cambio. Revisá internet e intentá nuevamente; tus datos anteriores siguen seguros.';
+    if (kind === 'permission') return 'Tu cuenta no tiene permiso para modificar esta ficha.';
+    if (kind === 'duplicate') return 'Este dato ya existe. Actualizá la vista antes de volver a guardarlo.';
     if (message.includes('relation') && (message.includes('training_assignments') || message.includes('player_messages'))) return 'La actualización del portal todavía no fue aplicada en la base de datos.';
     if (message.includes('ficha cloud')) return error.message;
     return 'No se pudo completar la acción. Tus demás datos no se modificaron.';
+  }
+
+  static errorKind(error) {
+    const code = String(error?.code || '').toUpperCase();
+    const status = Number(error?.status || error?.statusCode || 0);
+    const message = String(error?.message || error || '').toLowerCase();
+    if (
+      navigator.onLine === false ||
+      AuthEngine.isNetworkError?.(error) ||
+      /^PGRST00[0-3]$/.test(code) ||
+      code.startsWith('08') ||
+      [408, 503, 504, 520].includes(status)
+    ) return 'network';
+    if (code === '42501' || [401, 403].includes(status) || message.includes('row-level security') || message.includes('permission denied')) return 'permission';
+    if (code === '23505' || status === 409 || message.includes('duplicate key') || message.includes('unique constraint')) return 'duplicate';
+    return 'unknown';
   }
 
   static escapeHTML(value) {

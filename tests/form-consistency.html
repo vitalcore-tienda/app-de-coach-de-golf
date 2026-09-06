@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GolfCoach · Prueba de formularios</title>
+  <link rel="stylesheet" href="../css/style.css?test=v25">
+  <link rel="stylesheet" href="../css/components.css?test=v25">
+</head>
+<body>
+  <pre id="result" style="position:fixed;z-index:2000;top:0;left:0;max-width:100%;max-height:7rem;overflow:auto;background:#fff;color:#111;font:12px monospace;">Ejecutando…</pre>
+  <div id="design-system-fixture" aria-hidden="true" style="position:absolute;left:-10000px;width:600px;">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">Título de tarjeta</h3></div>
+      <div class="stat-label">Etiqueta</div>
+    </div>
+  </div>
+  <div class="modal-overlay active" id="global-modal">
+    <div class="modal-box" id="global-modal-content"></div>
+  </div>
+
+  <script>
+    window.StorageManager = {
+      workspaceOwnerId: 'coach-test',
+      isWorkspaceUnlocked: () => true,
+      getActivePlayerId: () => 'player-test',
+      getProfile: () => ({ name: 'Golfista de Prueba', handicap: 18.4, targetHandicap: 14 }),
+      getTournaments: async () => [],
+      getGoals: () => [],
+      createPlayer: async () => ({}),
+      saveTournament: async () => ({}),
+      saveGoals: async () => ({}),
+      makeId: (prefix) => `${prefix}-test`
+    };
+    window.App = {
+      currentView: 'players',
+      openModal() {
+        document.getElementById('global-modal').classList.add('active');
+        window.GolfForm?.enhance(document.getElementById('global-modal-content'));
+      },
+      closeModal() { document.getElementById('global-modal').classList.remove('active'); },
+      showToast() {},
+      updateWorkspaceVisibility() {},
+      updateProfileDisplay() {},
+      renderDashboard() {},
+      setModalCleanup() {}
+    };
+    window.AuthEngine = {
+      user: { id: 'coach-test' },
+      isCoach: () => true,
+      renderModal(content) {
+        document.getElementById('global-modal-content').innerHTML = content;
+        App.openModal();
+      },
+      client: {
+        from() {
+          return { insert: async () => ({ error: null }) };
+        }
+      }
+    };
+  </script>
+  <script src="../js/icons.js?test=v25"></script>
+  <script src="../js/utils.js?test=v25"></script>
+  <script src="../js/drills.js?test=v25"></script>
+  <script src="../js/players.js?test=v25"></script>
+  <script src="../js/rounds.js?test=v25"></script>
+  <script src="../js/mentor.js?test=v25"></script>
+  <script src="../js/player-portal.js?test=v25"></script>
+  <script>
+    (async () => {
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+      const modal = () => document.getElementById('global-modal-content');
+      const rootStyle = getComputedStyle(document.documentElement);
+      const designCard = document.querySelector('#design-system-fixture .card');
+      const designCardTitle = document.querySelector('#design-system-fixture .card-title');
+      const remSize = parseFloat(rootStyle.fontSize);
+      assert(rootStyle.getPropertyValue('--space-4').trim() === '1rem', 'Sistema visual: usa una escala de espaciado compartida');
+      assert(rootStyle.getPropertyValue('--text-sm').trim() === '0.8125rem', 'Sistema visual: usa una escala tipográfica compartida');
+      assert(parseFloat(getComputedStyle(designCard).paddingTop) === remSize * parseFloat(rootStyle.getPropertyValue('--card-padding')), 'Sistema visual: las tarjetas usan el relleno estándar');
+      assert(parseFloat(getComputedStyle(designCardTitle).fontSize) === remSize * parseFloat(rootStyle.getPropertyValue('--text-md')), 'Sistema visual: los títulos de tarjeta mantienen una jerarquía uniforme');
+      const assertSharedStructure = (formId, expectedTitle) => {
+        const form = document.getElementById(formId);
+        assert(Boolean(form?.classList.contains('app-form')), `${expectedTitle}: usa el formulario compartido`);
+        assert(modal().classList.contains('form-modal'), `${expectedTitle}: usa la ventana compartida`);
+        assert(modal().querySelector('.modal-title')?.textContent.trim() === expectedTitle, `${expectedTitle}: presenta un título claro`);
+        assert(Boolean(form.querySelector('.form-actions .btn-secondary') && form.querySelector('.form-actions .btn-primary')), `${expectedTitle}: mantiene acciones consistentes`);
+        const controls = [...form.querySelectorAll(GolfForm.controlSelector)];
+        assert(controls.every((control) => control.id && form.querySelector(`label[for="${control.id}"]`)), `${expectedTitle}: asocia cada campo con su etiqueta`);
+        return form;
+      };
+
+      try {
+        PlayerEngine.openNewPlayerModal();
+        const playerForm = assertSharedStructure('new-player-form', 'Agregar golfista');
+        assert(!GolfForm.validate(playerForm), 'Agregar golfista: bloquea datos indispensables vacíos');
+        assert(document.getElementById('new-player-name').getAttribute('aria-invalid') === 'true', 'Agregar golfista: marca el nombre junto al campo');
+        assert(Boolean(document.getElementById('new-player-name-error').textContent), 'Agregar golfista: explica el error inmediatamente');
+        document.getElementById('new-player-name').value = 'Martina López';
+        document.getElementById('new-player-handicap').value = '18.4';
+        document.getElementById('new-player-name').dispatchEvent(new Event('input'));
+        document.getElementById('new-player-handicap').dispatchEvent(new Event('input'));
+        assert(GolfForm.validate(playerForm), 'Agregar golfista: acepta los datos corregidos');
+
+        PlayerEngine.openTournamentModal();
+        const tournamentForm = assertSharedStructure('tournament-form', 'Agregar torneo');
+        document.getElementById('tournament-name-input').value = 'Abierto del Club';
+        document.getElementById('tournament-start-input').value = '2026-09-10';
+        document.getElementById('tournament-end-input').value = '2026-09-09';
+        await PlayerEngine.saveTournament();
+        assert(document.getElementById('tournament-end-input').getAttribute('aria-invalid') === 'true', 'Agregar torneo: detecta fechas inconsistentes');
+        assert(document.getElementById('tournament-save-status').classList.contains('error'), 'Agregar torneo: muestra un resumen de validación accesible');
+        assert(tournamentForm.querySelectorAll('.form-section').length === 2, 'Agregar torneo: agrupa datos relacionados');
+
+        MentorEngine.openNewGoalModal();
+        const goalForm = assertSharedStructure('goal-form', 'Agregar meta');
+        assert(!GolfForm.validate(goalForm), 'Agregar meta: exige un objetivo antes de guardar');
+        assert(document.getElementById('goal-title-input').getAttribute('aria-invalid') === 'true', 'Agregar meta: señala el campo que falta');
+
+        PlayerPortal.requireRemotePlayer = async () => ({ remoteId: '123e4567-e89b-12d3-a456-426614174000', name: 'Golfista de Prueba' });
+        await PlayerPortal.openCoachTrainingModal('player-test');
+        const trainingForm = assertSharedStructure('coach-training-form', 'Asignar entrenamiento');
+        assert(!GolfForm.validate(trainingForm), 'Asignar entrenamiento: exige un título');
+        assert(Boolean(trainingForm.querySelector('.form-hint')), 'Asignar entrenamiento: ofrece ayuda contextual');
+
+        PlayerPortal.active = false;
+        await RoundsEngine.openNewRoundModal();
+        const roundForm = assertSharedStructure('round-entry-form', 'Registrar ronda');
+        assert(!GolfForm.validate(roundForm), 'Registrar ronda: exige el nombre del campo');
+        assert(Boolean(roundForm.querySelector('.form-context strong')), 'Registrar ronda: confirma la ficha de destino');
+        assert(roundForm.querySelectorAll('.form-section').length === 3, 'Registrar ronda: separa datos, score y cierre');
+        assert([...roundForm.querySelectorAll('button')].every((button) => button.type === 'button'), 'Registrar ronda: sus controles no envían el formulario por accidente');
+        assert(roundForm.querySelectorAll('.hole-chip-btn').length === 18, 'Registrar ronda: mantiene accesibles los 18 hoyos');
+        assert(roundForm.querySelectorAll('.quick-score-row button').length === 4, 'Registrar ronda: ofrece carga rápida del score');
+        assert(roundForm.querySelectorAll('.round-metric-toggle').length === 3, 'Registrar ronda: agrupa las estadísticas opcionales como controles táctiles');
+        assert(document.getElementById('round-save-btn').disabled, 'Registrar ronda: evita guardar un scorecard incompleto');
+        document.getElementById('round-course-input').value = 'Club de Prueba';
+        RoundsEngine.startScorecard();
+        assert(!document.getElementById('round-setup-section').open, 'Registrar ronda: compacta los datos generales al empezar');
+        RoundsEngine.setQuickScore(0, 0);
+        RoundsEngine.adjustStepper(0, 'putts', 1);
+        assert(RoundsEngine.holeData[0].completed, 'Registrar ronda: completa un hoyo con score rápido y putts');
+        assert(document.getElementById('round-progress-label').textContent === '1 de 18 hoyos', 'Registrar ronda: actualiza el progreso inmediatamente');
+        RoundsEngine.advanceHole();
+        assert(RoundsEngine.activeMobileHole === 1, 'Registrar ronda: Guardar y seguir avanza al próximo hoyo');
+        assert(document.querySelector('.hole-chip-btn[aria-current="step"]')?.textContent.trim() === '2', 'Registrar ronda: comunica cuál es el hoyo activo');
+        RoundsEngine.holeData.forEach((hole) => { hole.strokes = hole.par; hole.putts = 2; hole.completed = true; });
+        RoundsEngine.updateLiveTotals();
+        assert(!document.getElementById('round-save-btn').disabled, 'Registrar ronda: habilita guardar al completar todos los hoyos');
+        assert(document.getElementById('round-progress-fill').style.width === '100%', 'Registrar ronda: muestra el progreso completo');
+        RoundsEngine.cancelRoundEntry();
+        assert(document.getElementById('global-modal').classList.contains('active'), 'Registrar ronda: el primer intento de cierre protege la carga iniciada');
+        assert(document.getElementById('round-cancel-btn').textContent === 'Descartar carga', 'Registrar ronda: exige una segunda confirmación para descartar');
+        RoundsEngine.cancelRoundEntry();
+        assert(!document.getElementById('global-modal').classList.contains('active'), 'Registrar ronda: permite descartar después de confirmar');
+
+        const result = document.getElementById('result');
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+        const preview = new URLSearchParams(location.search).get('preview');
+        if (preview === 'player') PlayerEngine.openNewPlayerModal();
+        if (preview === 'tournament') PlayerEngine.openTournamentModal();
+        if (preview === 'goal') MentorEngine.openNewGoalModal();
+        if (preview === 'training') await PlayerPortal.openCoachTrainingModal('player-test');
+        if (preview === 'round') await RoundsEngine.openNewRoundModal();
+        if (preview) result.hidden = true;
+      } catch (error) {
+        document.getElementById('result').textContent = JSON.stringify({ passed: false, error: error.message, checks }, null, 2);
+      }
+    })();
+  </script>
+</body>
+</html>

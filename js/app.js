@@ -6,14 +6,18 @@
 class App {
   static currentView = 'dashboard';
   static currentTheme = 'dark';
+  static ready = false;
+  static modalCleanup = null;
+  static claimingLegacyData = false;
+  static startingDemo = false;
+  static modalReturnFocus = null;
+  static drawerReturnFocus = null;
 
   static async init() {
-    // 1. Cargar la base local y migrar los datos que ya existían.
+    // 1. Preparar la base local sin exponer fichas hasta conocer la identidad.
     await StorageManager.initialize();
 
-    // 1.1 Resolver la sesión antes de exponer una experiencia por rol. Sin
-    // sesión, el modo local sigue disponible; con sesión, nunca se muestra el
-    // workspace del entrenador hasta confirmar el tipo de cuenta.
+    // 1.1 Resolver la sesión antes de desbloquear el workspace correspondiente.
     if (window.AuthEngine) {
       try {
         await AuthEngine.init();
@@ -36,10 +40,14 @@ class App {
         }
       });
     });
+    document.querySelectorAll('.view-panel').forEach((panel) => {
+      panel.setAttribute('aria-hidden', String(!panel.classList.contains('active')));
+    });
 
     // 4. Render Initial Dashboard View & Player Profile
     App.updateProfileDisplay();
     App.renderDashboard();
+    App.updateWorkspaceVisibility();
 
     // 5. Activar la experiencia instalable/offline una vez que la app ya
     // está lista para mostrar sus avisos y abrir accesos directos de PWA.
@@ -48,10 +56,191 @@ class App {
       PWAEngine.handleLaunchShortcut();
     }
 
+    App.ready = true;
     document.body.classList.remove('auth-resolving');
   }
 
+  static async onWorkspaceAccessChanged() {
+    if (!App.ready) return;
+    App.updateWorkspaceVisibility();
+    App.updateProfileDisplay();
+
+    if (!StorageManager.isWorkspaceUnlocked()) {
+      App.clearPrivateViewContent();
+      App.closeModal();
+      App.currentView = 'dashboard';
+      document.querySelectorAll('.view-panel').forEach((panel) => {
+        panel.classList.remove('active');
+        panel.setAttribute('aria-hidden', 'true');
+      });
+      const dashboardPanel = document.getElementById('dashboard-panel');
+      dashboardPanel?.classList.add('active');
+      dashboardPanel?.setAttribute('aria-hidden', 'false');
+      const title = document.getElementById('current-page-title');
+      if (title) title.textContent = 'Acceso seguro';
+      GolfA11y.announce('Sección Acceso seguro');
+      App.renderDashboard();
+      return;
+    }
+
+    if (window.PlayerPortal?.active) return;
+
+    App.renderDashboard();
+    if (App.currentView === 'players' && window.PlayerEngine) await PlayerEngine.renderPlayersView();
+    if (App.currentView === 'messages' && window.PlayerPortal) await PlayerPortal.renderCoachMessagesHub();
+  }
+
+  static updateWorkspaceVisibility() {
+    const unlocked = StorageManager.isWorkspaceUnlocked();
+    const hasPlayer = Boolean(StorageManager.getActivePlayerId());
+    document.body.classList.toggle('workspace-locked', !unlocked);
+    document.body.classList.toggle('workspace-empty', unlocked && !hasPlayer);
+
+    const profileButton = document.getElementById('profile-settings-btn');
+    const roundButton = document.getElementById('topbar-new-round-btn');
+    if (profileButton) profileButton.hidden = !hasPlayer;
+    if (roundButton) roundButton.hidden = !hasPlayer;
+    App.updateDemoModeIndicator();
+  }
+
+  static updateDemoModeIndicator() {
+    const active = StorageManager.isWorkspaceUnlocked()
+      && StorageManager.isDemoPlayer(StorageManager.getProfile());
+    const indicator = document.getElementById('demo-mode-indicator');
+    document.body.classList.toggle('demo-mode-active', active);
+    if (indicator) indicator.hidden = !active;
+  }
+
+  static renderEmptyWorkspaceOnboarding(legacyCount = StorageManager.unclaimedLegacyCount) {
+    const account = App.getAccountIdentity();
+    const coachName = App.escapeHTML(account.name || 'Entrenador');
+    return `
+      <div class="card card-gold-glow empty-workspace-card onboarding-shell">
+        <div class="onboarding-hero">
+          <div class="onboarding-eyebrow">
+            <span class="badge badge-green">Espacio listo y vacío</span>
+            <span style="font-size:0.78rem; color:var(--text-subtle);">1 de 3 · Configuración inicial</span>
+          </div>
+          <h2 style="margin-top:0.8rem;">Empecemos, ${coachName}</h2>
+          <p style="max-width:650px; color:var(--text-muted); line-height:1.6;">
+            No cargamos golfistas ni estadísticas de ejemplo automáticamente. Podés empezar con una ficha real o recorrer una demostración claramente identificada y sin sincronización.
+          </p>
+          <div class="onboarding-actions">
+            <button class="btn btn-primary" style="min-height:48px;" onclick="PlayerEngine.openNewPlayerModal()">Agregar primer golfista</button>
+            <button class="btn btn-secondary" id="explore-demo-btn" style="min-height:48px;" onclick="App.startDemoMode()">🧪 Explorar una demostración</button>
+            ${legacyCount ? `<button class="btn btn-secondary" style="min-height:48px;" onclick="App.claimLegacyData()">Revisar ${legacyCount} ficha${legacyCount === 1 ? '' : 's'} anterior${legacyCount === 1 ? '' : 'es'}</button>` : ''}
+          </div>
+          <div class="form-status" id="demo-start-status" role="status" aria-live="polite"></div>
+          ${legacyCount ? '<p style="font-size:0.8rem; color:var(--text-subtle); margin-top:0.85rem;">Las fichas anteriores siguen intactas y solo se vinculan si lo confirmás.</p>' : ''}
+        </div>
+        <div class="onboarding-steps" aria-label="Pasos de configuración">
+          <div class="onboarding-step complete">
+            <span class="onboarding-step-number">✓</span>
+            <span><strong>Cuenta protegida</strong><small>Tu sesión de entrenador ya está verificada.</small></span>
+          </div>
+          <div class="onboarding-step active">
+            <span class="onboarding-step-number">2</span>
+            <span><strong>Crear la ficha</strong><small>Nombre y hándicap son suficientes para empezar.</small></span>
+          </div>
+          <div class="onboarding-step">
+            <span class="onboarding-step-number">3</span>
+            <span><strong>Empezar el seguimiento</strong><small>Luego agregás diagnóstico, metas y rondas reales.</small></span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  static async startDemoMode() {
+    if (App.startingDemo) return;
+    const button = document.getElementById('explore-demo-btn');
+    const status = document.getElementById('demo-start-status');
+    App.startingDemo = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Preparando demostración…';
+    }
+    if (status) status.textContent = 'Creando datos simulados separados de tus fichas reales…';
+
+    try {
+      await StorageManager.createDemoWorkspace();
+      App.updateWorkspaceVisibility();
+      App.updateProfileDisplay();
+      App.renderDashboard();
+      App.showToast('🧪 Modo demo activo. Estos datos no se sincronizan.');
+    } catch (error) {
+      console.error('No se pudo iniciar la demostración:', error);
+      if (status) {
+        status.textContent = error.message || 'No se pudo preparar la demostración.';
+        status.classList.add('error');
+      }
+      if (button) {
+        button.disabled = false;
+        button.textContent = '🧪 Explorar una demostración';
+      }
+    } finally {
+      App.startingDemo = false;
+    }
+  }
+
+  static renderPlayerOnboarding(profile, assessment, rounds, goals) {
+    const items = [
+      { complete: Boolean(profile?.name) && profile?.handicap !== null && profile?.handicap !== undefined, title: 'Ficha básica', detail: 'Nombre y hándicap', action: '' },
+      { complete: Boolean(assessment?.completed), title: 'Diagnóstico 360°', detail: 'Punto de partida', action: "AssessmentEngine.startQuiz()" },
+      { complete: goals.length > 0, title: 'Primera meta', detail: 'Objetivo de trabajo', action: "App.navigateTo('mentor')" },
+      { complete: rounds.length > 0, title: 'Primera ronda', detail: 'Resultado real', action: "RoundsEngine.openNewRoundModal()" }
+    ];
+    const completed = items.filter((item) => item.complete).length;
+    if (completed === items.length) return '';
+    const next = items.find((item) => !item.complete && item.action);
+    return `
+      <div class="card" style="margin-bottom:1.5rem; border-color:rgba(212,175,55,0.3);">
+        <div class="card-header" style="align-items:flex-start; gap:1rem;">
+          <div>
+            <span class="badge badge-gold">Primeros pasos · ${completed}/${items.length}</span>
+            <h3 style="margin-top:0.55rem;">Prepará el seguimiento de ${App.escapeHTML(profile?.name || 'este golfista')}</h3>
+            <p style="margin-top:0.25rem; color:var(--text-muted);">Completá estos pasos a tu ritmo. Ningún dato se inventa ni se completa automáticamente.</p>
+          </div>
+          ${next ? `<button class="btn btn-primary btn-sm" onclick="${next.action}">Continuar</button>` : ''}
+        </div>
+        <div class="onboarding-checklist">
+          ${items.map((item) => `
+            <div class="onboarding-check ${item.complete ? 'complete' : ''}">
+              <span class="onboarding-check-icon">${item.complete ? '✓' : '○'}</span>
+              <span class="onboarding-check-copy"><strong>${item.title}</strong><small>${item.detail}</small></span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  static clearPrivateViewContent() {
+    [
+      'player-portal-container',
+      'players-container',
+      'messages-container',
+      'assessment-container',
+      'drills-container',
+      'mental-container',
+      'tactics-container',
+      'rounds-container',
+      'mentor-container'
+    ].forEach((id) => document.getElementById(id)?.replaceChildren());
+
+    if (window.RoundsEngine) {
+      RoundsEngine.holeData = [];
+      RoundsEngine.roundPlayerContext = null;
+    }
+    if (window.PlayerPortal) {
+      PlayerPortal.data = null;
+      PlayerPortal.coachContext = null;
+    }
+  }
+
   static navigateTo(viewId) {
+    App.closeMobileTopbarActions();
+
     // Las cuentas de golfista tienen una única experiencia enfocada. Aunque
     // algún atajo antiguo intente abrir una vista del entrenador, se mantiene
     // el portal activo (la seguridad de los datos también se aplica con RLS).
@@ -64,40 +253,59 @@ class App {
       return;
     }
 
+    if (!StorageManager.isWorkspaceUnlocked()) {
+      App.currentView = 'dashboard';
+      App.renderDashboard();
+      AuthEngine.openAccessModal();
+      return;
+    }
+
+    if (!StorageManager.getActivePlayerId() && !['dashboard', 'players'].includes(viewId)) {
+      App.showToast('Primero creá o seleccioná un golfista.');
+      viewId = 'players';
+    }
+
     App.currentView = viewId;
 
     // 1. Update Desktop Sidebar Active Class
     document.querySelectorAll('.sidebar .nav-item').forEach(item => {
       if (item.getAttribute('data-view') === viewId) {
         item.classList.add('active');
+        item.setAttribute('aria-current', 'page');
       } else {
         item.classList.remove('active');
+        item.removeAttribute('aria-current');
       }
     });
 
     // 2. Update Mobile Bottom Nav Active Class
-    document.querySelectorAll('.bottom-nav-item').forEach(item => {
+    document.querySelectorAll('.coach-bottom-nav .bottom-nav-item').forEach(item => {
       if (item.getAttribute('data-view') === viewId) {
         item.classList.add('active');
+        item.setAttribute('aria-current', 'page');
       } else {
         item.classList.remove('active');
+        item.removeAttribute('aria-current');
       }
     });
 
     // 3. Update View Panels
     document.querySelectorAll('.view-panel').forEach(panel => {
       panel.classList.remove('active');
+      panel.setAttribute('aria-hidden', 'true');
     });
 
     const activePanel = document.getElementById(`${viewId}-panel`);
     if (activePanel) {
       activePanel.classList.add('active');
+      activePanel.setAttribute('aria-hidden', 'false');
     }
 
     // 4. Update Topbar Title
     const titles = {
       dashboard: 'Dashboard 360°',
-      players: 'Golfistas & Datos',
+      players: 'Golfistas',
+      messages: 'Mensajes con Golfistas',
       assessment: 'Diagnóstico Integral 360°',
       drills: 'Planes de Entrenamiento & Drills',
       mental: 'Juego Mental & Rutina',
@@ -111,10 +319,12 @@ class App {
     if (titleEl) {
       titleEl.innerText = titles[viewId] || 'GolfCoach Pro';
     }
+    GolfA11y.announce(`Sección ${titles[viewId] || 'GolfCoach Pro'}`);
 
     // 5. Trigger Module Renderers
     if (viewId === 'dashboard') App.renderDashboard();
     if (viewId === 'players' && window.PlayerEngine) PlayerEngine.renderPlayersView();
+    if (viewId === 'messages' && window.PlayerPortal) PlayerPortal.renderCoachMessagesHub();
     if (viewId === 'assessment' && window.AssessmentEngine) AssessmentEngine.renderDiagnosticView();
     if (viewId === 'drills' && window.DrillsEngine) DrillsEngine.renderDrillsView();
     if (viewId === 'mental' && window.MentalEngine) MentalEngine.renderMentalView();
@@ -122,14 +332,26 @@ class App {
     if (viewId === 'rounds' && window.RoundsEngine) RoundsEngine.renderRoundsView();
     if (viewId === 'mentor' && window.MentorEngine) MentorEngine.renderMentorView();
 
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: GolfA11y.scrollBehavior() });
   }
 
   static toggleMobileDrawer() {
+    App.closeMobileTopbarActions();
     const drawer = document.getElementById('mobile-drawer-overlay');
-    if (drawer) {
-      drawer.classList.toggle('active');
+    if (!drawer) return;
+    if (drawer.classList.contains('active')) {
+      App.closeMobileDrawer();
+      return;
     }
+    App.drawerReturnFocus = document.activeElement;
+    drawer.classList.add('active');
+    drawer.setAttribute('aria-hidden', 'false');
+    document.querySelectorAll('#mobile-more-btn, #mobile-drawer-toggle-btn').forEach((button) => {
+      button.setAttribute('aria-expanded', 'true');
+    });
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = true;
+    window.requestAnimationFrame(() => drawer.querySelector('.modal-close')?.focus());
   }
 
   static closeMobileDrawer(event) {
@@ -137,14 +359,63 @@ class App {
       return;
     }
     const drawer = document.getElementById('mobile-drawer-overlay');
-    if (drawer) {
-      drawer.classList.remove('active');
-    }
+    if (!drawer) return;
+    const wasOpen = drawer.classList.contains('active');
+    drawer.classList.remove('active');
+    drawer.setAttribute('aria-hidden', 'true');
+    document.querySelectorAll('#mobile-more-btn, #mobile-drawer-toggle-btn').forEach((button) => {
+      button.setAttribute('aria-expanded', 'false');
+    });
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = false;
+    if (wasOpen && App.drawerReturnFocus?.isConnected) App.drawerReturnFocus.focus();
+    App.drawerReturnFocus = null;
+  }
+
+  static toggleMobileTopbarActions() {
+    const menu = document.getElementById('topbar-actions');
+    const button = document.getElementById('mobile-topbar-actions-btn');
+    if (!menu || !button) return;
+
+    const isOpen = menu.classList.toggle('mobile-actions-open');
+    button.setAttribute('aria-expanded', String(isOpen));
+    button.setAttribute('aria-label', isOpen ? 'Cerrar acciones' : 'Abrir acciones');
+  }
+
+  static closeMobileTopbarActions({ restoreFocus = false } = {}) {
+    const menu = document.getElementById('topbar-actions');
+    const button = document.getElementById('mobile-topbar-actions-btn');
+    if (!menu || !button) return;
+
+    const wasOpen = menu.classList.contains('mobile-actions-open');
+    menu.classList.remove('mobile-actions-open');
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-label', 'Abrir acciones');
+    if (restoreFocus && wasOpen) button.focus();
   }
 
   static renderDashboard() {
     const container = document.getElementById('dashboard-container');
     if (!container) return;
+
+    if (!StorageManager.isWorkspaceUnlocked()) {
+      container.innerHTML = `
+        <div class="card card-gold-glow secure-entry-card">
+          <span class="badge badge-green">Datos protegidos</span>
+          <h2 style="margin-top:0.75rem;">Ingresá para abrir tu espacio de entrenador</h2>
+          <p style="max-width:620px; color:var(--text-muted); line-height:1.6;">
+            Las fichas guardadas en este dispositivo están bloqueadas. Accedé con el correo del entrenador para continuar; después podrás trabajar sin conexión con esta misma sesión.
+          </p>
+          <button class="btn btn-primary" style="margin-top:1rem; min-height:46px;" onclick="AuthEngine.openAccessModal()">Ingresar por correo</button>
+        </div>
+      `;
+      return;
+    }
+
+    if (!StorageManager.getActivePlayerId()) {
+      container.innerHTML = App.renderEmptyWorkspaceOnboarding();
+      return;
+    }
 
     const profile = StorageManager.getProfile();
     const assessment = StorageManager.getAssessment();
@@ -159,8 +430,11 @@ class App {
       ? Math.round(rounds.reduce((sum, round) => sum + App.safeNumber(round.totalScore), 0) / rounds.length)
       : '-';
     const profileName = App.escapeHTML(profile.name || 'Golfista');
+    const isDemoProfile = StorageManager.isDemoPlayer(profile);
     const handicap = App.safeNumber(profile.handicap, 0);
-    const targetHandicap = App.safeNumber(profile.targetHandicap, 0);
+    const targetHandicap = profile.targetHandicap === null || profile.targetHandicap === undefined
+      ? '—'
+      : App.safeNumber(profile.targetHandicap, 0);
     const playerCategory = App.escapeHTML(profile.playerCategory || '—');
     const homeClub = App.escapeHTML(profile.homeClub || '—');
     const lastRoundScore = lastRound ? App.safeNumber(lastRound.totalScore, 0) : '-';
@@ -168,24 +442,32 @@ class App {
     const lastRoundCourse = lastRound ? App.escapeHTML(lastRound.course || '—') : 'Sin rondas';
 
     container.innerHTML = `
+      ${App.renderPlayerOnboarding(profile, assessment, rounds, goals)}
+      ${isDemoProfile ? `
+        <div class="demo-mode-notice">
+          <span class="demo-mode-notice-icon" aria-hidden="true">🧪</span>
+          <span><strong>Modo demo.</strong> Todos los nombres, rondas, diagnósticos y metas de esta ficha son simulados y nunca se sincronizan con la nube.</span>
+          <button class="btn btn-secondary btn-sm" onclick="PlayerEngine.openNewPlayerModal()">Agregar golfista real</button>
+        </div>
+      ` : ''}
       <!-- Coach workspace hero -->
-      <div class="card card-gold-glow" style="margin-bottom: 1.5rem; background: radial-gradient(circle at 10% 20%, rgba(24, 92, 59, 0.4) 0%, rgba(18, 25, 21, 0.95) 80%);">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+      <div class="card card-gold-glow view-hero dashboard-coach-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
+            <div class="view-kicker-row">
               <span class="badge badge-gold">Panel del entrenador</span>
               <span class="badge badge-green">Ficha seleccionada</span>
             </div>
             <h2>Resumen de ${profileName}</h2>
-            <p style="font-size: 0.88rem; max-width: 600px;">
+            <p>
               Estás trabajando sobre la ficha deportiva de <strong style="color: var(--text-main);">${profileName}</strong>. Todo lo que cargues quedará asociado a este golfista.
             </p>
           </div>
-          <div style="display: flex; gap: 0.5rem; width: 100%; flex-wrap: wrap;">
-            <button class="btn btn-primary btn-sm" style="flex: 1; min-height: 42px;" onclick="AssessmentEngine.startQuiz()">
+          <div class="view-actions dashboard-hero-actions">
+            <button class="btn btn-primary btn-sm" onclick="AssessmentEngine.startQuiz()">
               📋 Diagnóstico 360°
             </button>
-            <button class="btn btn-secondary btn-sm" style="flex: 1; min-height: 42px;" onclick="RoundsEngine.openNewRoundModal()">
+            <button class="btn btn-secondary btn-sm" onclick="RoundsEngine.openNewRoundModal()">
               ➕ Registrar Ronda
             </button>
           </div>
@@ -193,36 +475,36 @@ class App {
       </div>
 
       <!-- KPI Grid -->
-      <div class="grid-4" style="margin-bottom: 1.5rem;">
+      <div class="grid-4 dashboard-kpi-grid">
         <div class="card stat-card">
           <div class="stat-label">Hándicap Actual</div>
-          <div class="stat-value" style="color: var(--gold-400);">${handicap}</div>
+          <div class="stat-value dashboard-kpi-value dashboard-kpi-value-gold">${handicap}</div>
           <div class="stat-sub gold">🎯 Meta: ${targetHandicap}</div>
         </div>
 
         <div class="card stat-card">
-          <div class="stat-label">Promedio de Score</div>
-          <div class="stat-value">${avgScore}</div>
+          <div class="stat-label">Promedio Score</div>
+          <div class="stat-value dashboard-kpi-value">${avgScore}</div>
           <div class="stat-sub positive">⛳ ${rounds.length} rondas</div>
         </div>
 
         <div class="card stat-card">
           <div class="stat-label">Última Ronda</div>
-          <div class="stat-value" style="font-size: 1.4rem;">${lastRound ? `${lastRoundScore} (${lastRoundDiff})` : '-'}</div>
-          <div class="stat-sub" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${lastRoundCourse}</div>
+          <div class="stat-value dashboard-kpi-value dashboard-kpi-value-round">${lastRound ? `${lastRoundScore} (${lastRoundDiff})` : '-'}</div>
+          <div class="stat-sub dashboard-kpi-detail">${lastRoundCourse}</div>
         </div>
 
         <div class="card stat-card">
           <div class="stat-label">Perfil de Jugador</div>
-          <div class="stat-value" style="font-size: 1rem; line-height: 1.3; color: var(--primary-300);">
+          <div class="stat-value dashboard-kpi-value dashboard-kpi-value-profile">
             ${playerCategory}
           </div>
-          <div class="stat-sub gold">🏌️ Club: ${homeClub}</div>
+          <div class="stat-sub gold dashboard-kpi-detail">🏌️ Club: ${homeClub}</div>
         </div>
       </div>
 
       <!-- Main Dashboard Grid -->
-      <div class="grid-2" style="margin-bottom: 1.5rem;">
+      <div class="grid-2 layout-section">
         <!-- Radar Chart Widget -->
         <div class="card">
           <div class="card-header">
@@ -230,12 +512,13 @@ class App {
               <div class="card-icon">📊</div>
               <h3 class="card-title">Balance de los 5 Pilares</h3>
             </div>
-            <button class="btn btn-secondary btn-sm" onclick="App.navigateTo('assessment')">Detalles</button>
+            <button class="btn btn-secondary btn-sm" onclick="${assessment.completed ? "App.navigateTo('assessment')" : 'AssessmentEngine.startQuiz()'}">${assessment.completed ? 'Detalles' : 'Comenzar'}</button>
           </div>
-          <div class="radar-container">
-            ${AssessmentEngine.generateRadarSVG(scores)}
-          </div>
-          <div style="display: flex; justify-content: space-around; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem; margin-top: 0.5rem;">
+          ${assessment.completed ? `
+            <div class="radar-container">
+              ${AssessmentEngine.generateRadarSVG(scores)}
+            </div>
+            <div style="display: flex; justify-content: space-around; text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 0.85rem; margin-top: 0.5rem;">
             <div>
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Swing</span>
               <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.swing}%</div>
@@ -256,19 +539,25 @@ class App {
               <span style="font-size: 0.72rem; color: var(--text-subtle);">Físico</span>
               <div style="font-weight: 700; color: var(--gold-400); font-size: 0.95rem;">${scores.fitness}%</div>
             </div>
-          </div>
+            </div>
+          ` : `
+            <div class="empty-state-panel" style="padding:1.25rem 0.5rem;">
+              <p style="color:var(--text-muted); line-height:1.5;">Todavía no hay una evaluación. El gráfico aparecerá cuando se complete el diagnóstico; no mostramos valores estimados.</p>
+              <button class="btn btn-primary btn-sm" style="margin-top:0.75rem;" onclick="AssessmentEngine.startQuiz()">Iniciar diagnóstico 360°</button>
+            </div>
+          `}
         </div>
 
         <!-- Recommended Daily Drill & Quick Actions -->
-        <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <div class="content-stack">
           <!-- Drill of the Day -->
           <div class="card" style="border-left: 4px solid var(--gold-400);">
             <div class="card-header">
               <span class="badge badge-gold">Drill Recomendado</span>
               <span class="badge badge-blue">⏱️ 20 min</span>
             </div>
-            <h3 style="margin-bottom: 0.4rem; font-size: 1.05rem;">Drill del Reloj / Estrella a 1 Metro</h3>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.85rem;">
+            <h3 class="content-title">Drill del Reloj / Estrella a 1 Metro</h3>
+            <p class="content-copy">
               Enfocado en eliminar tripateos y construir confianza inquebrantable bajo presión.
             </p>
             <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
@@ -292,7 +581,7 @@ class App {
             </div>
 
             <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-              ${goals.slice(0, 2).map(g => {
+              ${goals.length ? goals.slice(0, 2).map(g => {
                 const progress = App.clampNumber(g.progress, 0, 100, 0);
                 return `
                 <div>
@@ -300,17 +589,38 @@ class App {
                     <span style="font-weight: 600;">${App.escapeHTML(g.title || 'Meta sin título')}</span>
                     <span style="color: var(--gold-400); font-weight: 700;">${progress}%</span>
                   </div>
-                  <div class="progress-bar-container">
+                  <div class="progress-bar-container" role="progressbar" aria-label="Progreso de la meta ${App.escapeHTML(g.title || 'Meta sin título')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}">
                     <div class="progress-bar-fill" style="width: ${progress}%;"></div>
                   </div>
                 </div>
               `;
-              }).join('')}
+              }).join('') : '<p style="color:var(--text-muted); font-size:0.86rem;">Todavía no hay metas cargadas. Creá la primera desde Mentoría.</p>'}
             </div>
           </div>
         </div>
       </div>
     `;
+  }
+
+  static async claimLegacyData() {
+    if (App.claimingLegacyData || !StorageManager.hasUnclaimedLegacyData()) return;
+    const accepted = window.confirm('Se vincularán las fichas locales anteriores a la cuenta de entrenador que está abierta. Cualquier ficha de demostración quedará marcada como ejemplo y no se subirá a la nube. ¿Querés continuar?');
+    if (!accepted) return;
+
+    App.claimingLegacyData = true;
+    try {
+      const claimed = await StorageManager.claimLegacyWorkspace();
+      App.updateWorkspaceVisibility();
+      App.updateProfileDisplay();
+      App.renderDashboard();
+      if (App.currentView === 'players' && window.PlayerEngine) await PlayerEngine.renderPlayersView();
+      App.showToast(`${claimed} ficha${claimed === 1 ? '' : 's'} vinculada${claimed === 1 ? '' : 's'} a tu cuenta.`);
+    } catch (error) {
+      console.error('No se pudieron vincular los datos locales:', error);
+      App.showToast('No se pudieron vincular las fichas anteriores. Tus datos no fueron eliminados.');
+    } finally {
+      App.claimingLegacyData = false;
+    }
   }
 
   static toggleTheme() {
@@ -323,7 +633,9 @@ class App {
   static updateThemeIcon() {
     const btn = document.getElementById('theme-toggle-btn');
     if (btn) {
-      btn.innerHTML = App.currentTheme === 'dark' ? '☀️' : '🌙';
+      const icon = btn.querySelector('.topbar-action-icon');
+      if (icon) icon.textContent = App.currentTheme === 'dark' ? '☀️' : '🌙';
+      else btn.textContent = App.currentTheme === 'dark' ? '☀️' : '🌙';
     }
   }
 
@@ -348,15 +660,15 @@ class App {
     }
 
     return {
-      label: 'Entrenador',
-      name: 'Modo local'
+      label: 'Acceso requerido',
+      name: 'Espacio bloqueado'
     };
   }
 
   static updateWorkspaceContext() {
     const profile = StorageManager.getProfile();
-    const playerName = String(profile?.name || 'Golfista');
-    const handicap = App.safeNumber(profile?.handicap, 0);
+    const playerName = String(profile?.name || 'Sin golfista');
+    const handicap = profile?.handicap === null || profile?.handicap === undefined ? null : App.safeNumber(profile.handicap, 0);
     const account = App.getAccountIdentity();
     const accountLabel = document.getElementById('workspace-account-label');
     const coachName = document.getElementById('workspace-coach-name');
@@ -368,7 +680,7 @@ class App {
     if (accountLabel) accountLabel.textContent = account.label;
     if (coachName) coachName.textContent = account.name;
     if (playerNameEl) playerNameEl.textContent = playerName;
-    if (playerHcp) playerHcp.textContent = `HCP ${handicap}`;
+    if (playerHcp) playerHcp.textContent = handicap === null ? 'HCP —' : `HCP ${handicap}`;
 
     if (accountButton) {
       const accountAction = `${account.label}: ${account.name}. Abrir cuenta.`;
@@ -377,17 +689,20 @@ class App {
     }
 
     if (playerButton) {
-      const playerAction = `Viendo a ${playerName}, hándicap ${handicap}. Cambiar golfista seleccionado.`;
+      const playerAction = profile
+        ? `Viendo a ${playerName}, hándicap ${handicap ?? 'sin cargar'}. Cambiar golfista seleccionado.`
+        : 'No hay un golfista seleccionado. Crear o seleccionar una ficha.';
       playerButton.title = playerAction;
       playerButton.setAttribute('aria-label', playerAction);
+      playerButton.disabled = !StorageManager.isWorkspaceUnlocked();
     }
   }
 
   static updateProfileDisplay() {
     const profile = StorageManager.getProfile();
-    const name = String(profile?.name || 'Golfista');
-    const handicap = App.safeNumber(profile?.handicap, 0);
-    const targetHandicap = App.safeNumber(profile?.targetHandicap, 0);
+    const name = String(profile?.name || 'Sin golfista');
+    const handicap = profile?.handicap === null || profile?.handicap === undefined ? '—' : App.safeNumber(profile.handicap, 0);
+    const targetHandicap = profile?.targetHandicap === null || profile?.targetHandicap === undefined ? '—' : App.safeNumber(profile.targetHandicap, 0);
     
     // Sidebar elements
     const nameEl = document.getElementById('sidebar-player-name');
@@ -396,7 +711,7 @@ class App {
 
     if (nameEl) nameEl.innerText = name;
     if (hcpEl) hcpEl.innerText = `HCP ${handicap} · Meta ${targetHandicap}`;
-    if (avatarEl) avatarEl.innerText = name.charAt(0).toUpperCase();
+    if (avatarEl) avatarEl.innerText = profile ? name.charAt(0).toUpperCase() : '—';
 
     // Drawer elements
     const dNameEl = document.getElementById('drawer-player-name');
@@ -405,13 +720,41 @@ class App {
 
     if (dNameEl) dNameEl.innerText = name;
     if (dHcpEl) dHcpEl.innerText = `HCP ${handicap} · Cambiar`;
-    if (dAvatarEl) dAvatarEl.innerText = name.charAt(0).toUpperCase();
+    if (dAvatarEl) dAvatarEl.innerText = profile ? name.charAt(0).toUpperCase() : '—';
 
     App.updateWorkspaceContext();
+    App.updateDemoModeIndicator();
+  }
+
+  static openDemoModeInfo() {
+    if (!StorageManager.isDemoPlayer(StorageManager.getProfile())) return;
+    const modalContent = document.getElementById('global-modal-content');
+    if (!modalContent) return;
+    modalContent.innerHTML = `
+      <div class="modal-handle-bar"></div>
+      <div class="modal-header">
+        <div>
+          <span class="badge badge-gold">🧪 Modo demo</span>
+          <h3 style="margin-top:0.4rem;">Estás explorando datos simulados</h3>
+        </div>
+        <button class="modal-close" onclick="App.closeModal()">&times;</button>
+      </div>
+      <p style="color:var(--text-muted); line-height:1.6;">Esta ficha, sus rondas, diagnóstico y metas son ejemplos. No se envían a la nube ni se mezclan con los golfistas reales.</p>
+      <div style="display:flex; gap:0.65rem; flex-wrap:wrap; margin-top:1.25rem;">
+        <button class="btn btn-primary" onclick="App.closeModal(); PlayerEngine.openNewPlayerModal()">Agregar golfista real</button>
+        <button class="btn btn-secondary" onclick="App.closeModal(); App.navigateTo('players')">Ver todas las fichas</button>
+      </div>
+    `;
+    App.openModal();
   }
 
   static openProfileModal() {
     const profile = StorageManager.getProfile();
+    if (!profile) {
+      App.showToast('Primero creá o seleccioná un golfista.');
+      window.PlayerEngine?.openNewPlayerModal?.();
+      return;
+    }
     const profileName = App.escapeHTML(profile?.name || 'Golfista');
     const modal = document.getElementById('global-modal');
     const modalContent = document.getElementById('global-modal-content');
@@ -428,72 +771,73 @@ class App {
       </div>
 
       <div class="form-group">
-        <label class="form-label">Nombre Completo</label>
+        <label class="form-label" for="profile-name-input">Nombre Completo</label>
         <input type="text" class="form-control" id="profile-name-input" value="${App.escapeHTML(profile.name)}">
       </div>
 
       <div class="grid-2">
         <div class="form-group">
-          <label class="form-label">Email</label>
+          <label class="form-label" for="profile-email-input">Email</label>
           <input type="email" class="form-control" id="profile-email-input" value="${App.escapeHTML(profile.email || '')}" placeholder="nombre@email.com">
         </div>
         <div class="form-group">
-          <label class="form-label">Teléfono</label>
+          <label class="form-label" for="profile-phone-input">Teléfono</label>
           <input type="text" class="form-control" id="profile-phone-input" value="${App.escapeHTML(profile.phone || '')}" placeholder="Contacto">
         </div>
       </div>
 
       <div class="grid-3">
         <div class="form-group">
-          <label class="form-label">Hándicap Actual</label>
+          <label class="form-label" for="profile-hcp-input">Hándicap Actual</label>
           <input type="number" step="0.1" class="form-control" id="profile-hcp-input" value="${App.safeNumber(profile.handicap, 0)}">
         </div>
         <div class="form-group">
-          <label class="form-label">Hándicap Objetivo</label>
-          <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${App.safeNumber(profile.targetHandicap, 0)}">
+          <label class="form-label" for="profile-target-hcp-input">Hándicap Objetivo</label>
+          <input type="number" step="0.1" class="form-control" id="profile-target-hcp-input" value="${profile.targetHandicap ?? ''}">
         </div>
         <div class="form-group">
-          <label class="form-label">Licencia Federativa</label>
+          <label class="form-label" for="profile-license-input">Licencia Federativa</label>
           <input type="text" class="form-control" id="profile-license-input" value="${App.escapeHTML(profile.federationLicense || '')}" placeholder="Opcional">
         </div>
       </div>
 
       <div class="grid-2">
         <div class="form-group">
-          <label class="form-label">Club Principal</label>
+          <label class="form-label" for="profile-club-input">Club Principal</label>
           <input type="text" class="form-control" id="profile-club-input" value="${App.escapeHTML(profile.homeClub || '')}">
         </div>
         <div class="form-group">
-          <label class="form-label">Carry Driver (m)</label>
-          <input type="number" class="form-control" id="profile-driver-input" value="${App.safeNumber(profile.driverDistanceAvg, 0)}">
+          <label class="form-label" for="profile-driver-input">Carry Driver (m)</label>
+          <input type="number" class="form-control" id="profile-driver-input" value="${profile.driverDistanceAvg ?? ''}">
         </div>
       </div>
 
       <div class="grid-3">
         <div class="form-group">
-          <label class="form-label">Mano Dominante</label>
+          <label class="form-label" for="profile-hand-input">Mano Dominante</label>
           <select class="form-control" id="profile-hand-input">
             <option ${profile.dominantHand === 'Diestro' ? 'selected' : ''}>Diestro</option>
             <option ${profile.dominantHand === 'Zurdo' ? 'selected' : ''}>Zurdo</option>
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Años de Experiencia</label>
+          <label class="form-label" for="profile-experience-input">Años de Experiencia</label>
           <input type="number" min="0" class="form-control" id="profile-experience-input" value="${App.safeNumber(profile.experienceYears, 0)}">
         </div>
         <div class="form-group">
-          <label class="form-label">Fecha de Nacimiento</label>
+          <label class="form-label" for="profile-birthdate-input">Fecha de Nacimiento</label>
           <input type="date" class="form-control" id="profile-birthdate-input" value="${App.escapeHTML(profile.birthDate || '')}">
         </div>
       </div>
 
       <div class="form-group">
-        <label class="form-label">Categoría / Nivel</label>
+        <label class="form-label" for="profile-category-input">Categoría / Nivel</label>
         <input type="text" class="form-control" id="profile-category-input" value="${App.escapeHTML(profile.playerCategory || '')}" placeholder="Ej.: Amateur competitivo">
       </div>
 
       <div style="margin-top: 1.25rem;">
-        <button class="btn btn-primary" style="width: 100%; min-height: 48px;" onclick="App.saveProfile()">Guardar Cambios</button>
+        <div class="form-status" id="profile-save-status" role="status" aria-live="polite"></div>
+        <button class="btn btn-primary" id="profile-save-btn" style="width: 100%; min-height: 48px;" onclick="App.saveProfile()">Guardar cambios</button>
       </div>
     `;
 
@@ -501,30 +845,50 @@ class App {
   }
 
   static async saveProfile() {
+    const button = document.getElementById('profile-save-btn');
+    const status = document.getElementById('profile-save-status');
+    if (button?.disabled) return;
     const profile = StorageManager.getProfile();
-    profile.name = document.getElementById('profile-name-input')?.value || profile.name;
-    profile.email = document.getElementById('profile-email-input')?.value || '';
-    profile.phone = document.getElementById('profile-phone-input')?.value || '';
-    profile.handicap = parseFloat(document.getElementById('profile-hcp-input')?.value || profile.handicap);
-    profile.targetHandicap = parseFloat(document.getElementById('profile-target-hcp-input')?.value || profile.targetHandicap);
-    profile.federationLicense = document.getElementById('profile-license-input')?.value || '';
-    profile.homeClub = document.getElementById('profile-club-input')?.value || profile.homeClub;
-    profile.driverDistanceAvg = parseInt(document.getElementById('profile-driver-input')?.value || profile.driverDistanceAvg);
-    profile.dominantHand = document.getElementById('profile-hand-input')?.value || profile.dominantHand;
-    profile.experienceYears = parseInt(document.getElementById('profile-experience-input')?.value || profile.experienceYears);
-    profile.birthDate = document.getElementById('profile-birthdate-input')?.value || '';
-    profile.playerCategory = document.getElementById('profile-category-input')?.value || profile.playerCategory;
+    if (!profile) return;
+    const read = (id) => document.getElementById(id)?.value?.trim() || '';
+    const readOptionalNumber = (id) => {
+      const value = read(id);
+      return value === '' ? null : Number(value);
+    };
+    profile.name = read('profile-name-input');
+    profile.email = read('profile-email-input');
+    profile.phone = read('profile-phone-input');
+    profile.handicap = readOptionalNumber('profile-hcp-input');
+    profile.targetHandicap = readOptionalNumber('profile-target-hcp-input');
+    profile.federationLicense = read('profile-license-input');
+    profile.homeClub = read('profile-club-input');
+    profile.driverDistanceAvg = readOptionalNumber('profile-driver-input');
+    profile.dominantHand = read('profile-hand-input') || 'Diestro';
+    profile.experienceYears = readOptionalNumber('profile-experience-input') ?? 0;
+    profile.birthDate = read('profile-birthdate-input');
+    profile.playerCategory = read('profile-category-input');
 
     try {
+      GolfForm.setBusy(button, true, 'Guardando perfil…');
+      if (status) {
+        status.textContent = '';
+        status.classList.remove('error');
+      }
       await StorageManager.saveProfile(profile);
       App.updateProfileDisplay();
       App.closeModal();
-      App.showToast('✅ Perfil actualizado.');
+      App.showSaveConfirmation('Perfil actualizado', 'Los cambios quedaron asociados a esta ficha.');
       App.renderDashboard();
       if (App.currentView === 'players' && window.PlayerEngine) await PlayerEngine.renderPlayersView();
     } catch (error) {
       console.error('No se pudo actualizar el perfil:', error);
-      App.showToast('No se pudo actualizar el perfil.');
+      const message = error.message || 'No se pudo actualizar el perfil.';
+      if (status) {
+        status.textContent = message;
+        status.classList.add('error');
+      }
+      GolfForm.setBusy(button, false);
+      App.showToast(message);
     }
   }
 
@@ -548,15 +912,86 @@ class App {
 
   static openModal() {
     const modal = document.getElementById('global-modal');
-    if (modal) modal.classList.add('active');
+    const modalContent = document.getElementById('global-modal-content');
+    if (modalContent && window.GolfForm) GolfForm.enhance(modalContent);
+    if (!modal || !modalContent) return;
+    const wasOpen = modal.classList.contains('active');
+    if (!wasOpen) App.modalReturnFocus = document.activeElement;
+    modalContent.querySelectorAll('button:not([type])').forEach((button) => { button.type = 'button'; });
+    modalContent.querySelectorAll('.modal-close').forEach((button) => {
+      if (!button.getAttribute('aria-label')) button.setAttribute('aria-label', 'Cerrar ventana');
+    });
+    const heading = modalContent.querySelector('h1, h2, h3');
+    if (heading) {
+      if (!heading.id) heading.id = `modal-title-${Date.now()}`;
+      modalContent.setAttribute('aria-labelledby', heading.id);
+      modalContent.removeAttribute('aria-label');
+    } else {
+      modalContent.removeAttribute('aria-labelledby');
+      modalContent.setAttribute('aria-label', 'Ventana de GolfCoach');
+    }
+    modal.classList.add('active');
+    modal.setAttribute('aria-hidden', 'false');
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = true;
+    const drawer = document.getElementById('mobile-drawer-overlay');
+    if (drawer) drawer.inert = true;
+    window.requestAnimationFrame(() => modalContent.focus({ preventScroll: true }));
   }
 
   static closeModal() {
     const modal = document.getElementById('global-modal');
-    if (modal) modal.classList.remove('active');
+    const wasOpen = modal?.classList.contains('active');
+    if (modal) {
+      modal.classList.remove('active');
+      modal.setAttribute('aria-hidden', 'true');
+    }
+    const appContainer = document.querySelector('.app-container');
+    if (appContainer) appContainer.inert = false;
+    const drawer = document.getElementById('mobile-drawer-overlay');
+    if (drawer) drawer.inert = false;
+    document.getElementById('global-modal-content')?.classList.remove('form-modal');
+    const cleanup = App.modalCleanup;
+    App.modalCleanup = null;
+    if (typeof cleanup === 'function') cleanup();
+    if (wasOpen && App.modalReturnFocus?.isConnected) App.modalReturnFocus.focus();
+    App.modalReturnFocus = null;
   }
 
-  static showToast(message) {
+  static requestModalClose() {
+    if (document.getElementById('round-entry-form') && window.RoundsEngine?.roundPlayerContext) {
+      RoundsEngine.cancelRoundEntry();
+      return;
+    }
+    App.closeModal();
+  }
+
+  static setModalCleanup(cleanup) {
+    App.modalCleanup = typeof cleanup === 'function' ? cleanup : null;
+  }
+
+  static toastType(message, requestedType = '') {
+    if (['success', 'error', 'warning', 'info'].includes(requestedType)) return requestedType;
+    const normalized = String(message || '').toLowerCase();
+    if (normalized.includes('no se pudo') || normalized.includes('error') || normalized.includes('falló')) return 'error';
+    if (normalized.includes('revisá') || normalized.includes('primero') || normalized.includes('necesitás') || normalized.includes('sin conexión')) return 'warning';
+    if (normalized.includes('guardad') || normalized.includes('completad') || normalized.includes('actualizad') || normalized.includes('registrad') || normalized.includes('cread')) return 'success';
+    return 'info';
+  }
+
+  static showSaveConfirmation(title, detail = '') {
+    const offline = navigator.onLine === false;
+    App.showToast({
+      title,
+      message: detail || (offline
+        ? 'Guardado en este dispositivo. Podés seguir trabajando sin conexión.'
+        : 'Tus cambios quedaron guardados correctamente.'),
+      type: 'success',
+      duration: 4200
+    });
+  }
+
+  static showToast(message, type = '', options = {}) {
     let container = document.getElementById('toast-container');
     if (!container) {
       container = document.createElement('div');
@@ -565,12 +1000,32 @@ class App {
       document.body.appendChild(container);
     }
 
+    const config = message && typeof message === 'object'
+      ? message
+      : { title: '', message: String(message ?? ''), type, ...options };
+    const resolvedType = App.toastType(config.message || config.title, config.type || type);
+    const titles = {
+      success: 'Listo',
+      error: 'No se pudo completar',
+      warning: 'Revisá esto',
+      info: 'GolfCoach'
+    };
+    const symbols = { success: '✓', error: '×', warning: '!', info: 'i' };
     const toast = document.createElement('div');
-    toast.className = 'toast';
+    toast.className = `toast toast-${resolvedType}`;
+    toast.setAttribute('role', resolvedType === 'error' ? 'alert' : 'status');
+    toast.setAttribute('aria-live', resolvedType === 'error' ? 'assertive' : 'polite');
     const icon = document.createElement('span');
-    icon.textContent = '⛳';
+    icon.className = 'toast-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = symbols[resolvedType];
     const content = document.createElement('div');
-    content.textContent = String(message ?? '');
+    content.className = 'toast-copy';
+    const heading = document.createElement('strong');
+    heading.textContent = String(config.title || titles[resolvedType]);
+    const body = document.createElement('span');
+    body.textContent = String(config.message || '');
+    content.replaceChildren(heading, body);
     toast.replaceChildren(icon, content);
     container.appendChild(toast);
 
@@ -579,15 +1034,52 @@ class App {
       toast.style.transform = 'translateY(15px)';
       toast.style.transition = 'all 0.25s ease';
       setTimeout(() => toast.remove(), 250);
-    }, 2800);
+    }, Number(config.duration) > 0 ? Number(config.duration) : 3400);
   }
 }
 
 window.App = App;
 
 document.addEventListener('DOMContentLoaded', () => {
+  document.querySelector('.skip-link')?.addEventListener('click', () => {
+    window.requestAnimationFrame(() => document.getElementById('main-content')?.focus({ preventScroll: true }));
+  });
   App.init().catch((error) => {
     console.error('No se pudo iniciar GolfCoach:', error);
     document.body.classList.remove('auth-resolving');
   });
+});
+
+document.addEventListener('click', (event) => {
+  const menu = document.getElementById('topbar-actions');
+  const button = document.getElementById('mobile-topbar-actions-btn');
+  if (!menu?.classList.contains('mobile-actions-open')) return;
+  if (menu.contains(event.target) || button?.contains(event.target)) return;
+  App.closeMobileTopbarActions();
+});
+
+document.addEventListener('keydown', (event) => {
+  const modal = document.getElementById('global-modal');
+  if (modal?.classList.contains('active')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      App.requestModalClose();
+    } else {
+      GolfA11y.trapFocus(event, document.getElementById('global-modal-content'));
+    }
+    return;
+  }
+
+  const drawer = document.getElementById('mobile-drawer-overlay');
+  if (drawer?.classList.contains('active')) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      App.closeMobileDrawer();
+    } else {
+      GolfA11y.trapFocus(event, drawer.querySelector('.mobile-drawer-content'));
+    }
+    return;
+  }
+
+  if (event.key === 'Escape') App.closeMobileTopbarActions({ restoreFocus: true });
 });

@@ -1,17 +1,18 @@
 /**
  * GolfCoach Pro - acceso por correo con Supabase Auth.
  *
- * Esta capa gestiona identidad y rol remoto. El modo local de IndexedDB sigue
- * funcionando sin conexión; el respaldo cloud es siempre explícito y usa RLS.
+ * Esta capa gestiona identidad y rol remoto. IndexedDB sigue funcionando sin
+ * conexión, pero cada workspace local queda bloqueado por identidad.
  */
 
 class AuthEngine {
   static PROFILE_CACHE_PREFIX = 'auth-profile-cache:';
+  static PROFILE_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
   static supabaseUrl = 'https://qfcvoenhnxxonemqsvmy.supabase.co';
   // Las publishable keys son deliberadamente públicas: RLS protege los datos.
   // Nunca agregar aquí una service_role o una clave secreta.
   static publishableKey = 'sb_publishable_rpsQPcuk_QFHef8manp3WQ_LHB3Nd4M';
-  static redirectUrl = 'https://vitalcore-tienda.github.io/app-de-coach-de-golf/';
+  static redirectUrl = 'https://adanbrilzgolf.com.ar/';
 
   static client = null;
   static user = null;
@@ -19,6 +20,8 @@ class AuthEngine {
   static initialized = false;
   static initPromise = null;
   static retryPromise = null;
+  static identityGeneration = 0;
+  static authEventQueue = Promise.resolve();
 
   static init() {
     if (!AuthEngine.initPromise) {
@@ -31,8 +34,9 @@ class AuthEngine {
     AuthEngine.initialized = true;
 
     if (!window.supabase?.createClient) {
+      StorageManager.lockWorkspace();
       AuthEngine.updateAccessButton();
-      console.warn('El cliente de Supabase no está disponible; se mantiene el modo local.');
+      console.warn('El cliente de Supabase no está disponible; el workspace permanece bloqueado.');
       return;
     }
 
@@ -52,7 +56,12 @@ class AuthEngine {
     // El callback debe ser liviano: el SDK mantiene un bloqueo interno de
     // sesión y las consultas remotas se ejecutan en el siguiente turno.
     AuthEngine.client.auth.onAuthStateChange((event, session) => {
-      window.setTimeout(() => AuthEngine.handleAuthEvent(event, session), 0);
+      const generation = ++AuthEngine.identityGeneration;
+      window.setTimeout(() => {
+        AuthEngine.authEventQueue = AuthEngine.authEventQueue
+          .catch(() => undefined)
+          .then(() => AuthEngine.handleAuthEvent(event, session, generation));
+      }, 0);
     });
     window.addEventListener('online', () => {
       if (AuthEngine.user) {
@@ -72,17 +81,17 @@ class AuthEngine {
     await window.PlayerPortal?.onAuthStateChanged?.();
   }
 
-  static async handleAuthEvent(event, session) {
+  static async handleAuthEvent(event, session, generation = ++AuthEngine.identityGeneration) {
     if (event === 'SIGNED_OUT' || !session) {
-      AuthEngine.user = null;
-      AuthEngine.profile = null;
-      AuthEngine.updateAccessButton();
+      await AuthEngine.commitIdentity(null, null, generation);
+      await window.CloudSync?.onAuthStateChanged?.();
       await window.PlayerPortal?.onAuthStateChanged?.();
       return;
     }
 
     try {
-      await AuthEngine.refreshIdentity();
+      const applied = await AuthEngine.refreshIdentity({ generation });
+      if (!applied) return;
       if (AuthEngine.user) AuthEngine.clearAuthCallbackArtifacts();
       await window.CloudSync?.onAuthStateChanged?.();
       await window.PlayerPortal?.onAuthStateChanged?.();
@@ -96,52 +105,58 @@ class AuthEngine {
     }
   }
 
-  static async refreshIdentity() {
+  static async commitIdentity(user, profile, generation) {
+    if (generation !== AuthEngine.identityGeneration) return false;
+    AuthEngine.user = user || null;
+    AuthEngine.profile = profile || null;
+
+    if (AuthEngine.user?.id && AuthEngine.profile?.account_role === 'coach') {
+      await StorageManager.unlockWorkspace(AuthEngine.user.id);
+    } else {
+      StorageManager.lockWorkspace();
+    }
+
+    if (generation !== AuthEngine.identityGeneration) return false;
+    AuthEngine.updateAccessButton();
+    await window.App?.onWorkspaceAccessChanged?.();
+    return true;
+  }
+
+  static async refreshIdentity({ generation = ++AuthEngine.identityGeneration } = {}) {
     if (!AuthEngine.client) return;
 
     const { data: sessionData } = await AuthEngine.client.auth.getSession();
     const session = sessionData?.session;
 
     if (!session) {
-      AuthEngine.user = null;
-      AuthEngine.profile = null;
-      AuthEngine.updateAccessButton();
-      return;
+      return AuthEngine.commitIdentity(null, null, generation);
     }
+
+    let nextUser = session.user || null;
+    let nextProfile = null;
 
     // La app no invalida una sesión local simplemente porque el dispositivo
     // está offline. RLS se seguirá aplicando al volver a consultar la nube.
     if (navigator.onLine === false) {
-      const localUser = session.user || AuthEngine.user;
-      // Nunca reutilizar el rol de otra sesión que pudo haber quedado en el
-      // almacenamiento del navegador.
-      if (AuthEngine.profile?.id !== localUser?.id) {
-        AuthEngine.profile = await AuthEngine.readCachedProfile(localUser?.id);
-      }
-      AuthEngine.user = localUser;
-      AuthEngine.updateAccessButton();
-      return;
+      nextProfile = AuthEngine.profile?.id === nextUser?.id
+        ? AuthEngine.profile
+        : await AuthEngine.readCachedProfile(nextUser?.id);
+      return AuthEngine.commitIdentity(nextUser, nextProfile, generation);
     }
 
     const { data: userData, error: userError } = await AuthEngine.client.auth.getUser();
     if (userError || !userData?.user) {
       if (AuthEngine.isNetworkError(userError)) {
-        const localUser = session.user || AuthEngine.user;
-        if (AuthEngine.profile?.id !== localUser?.id) {
-          AuthEngine.profile = await AuthEngine.readCachedProfile(localUser?.id);
-        }
-        AuthEngine.user = localUser;
-        AuthEngine.updateAccessButton();
-        return;
+        nextProfile = AuthEngine.profile?.id === nextUser?.id
+          ? AuthEngine.profile
+          : await AuthEngine.readCachedProfile(nextUser?.id);
+        return AuthEngine.commitIdentity(nextUser, nextProfile, generation);
       }
 
-      AuthEngine.user = null;
-      AuthEngine.profile = null;
-      AuthEngine.updateAccessButton();
-      return;
+      return AuthEngine.commitIdentity(null, null, generation);
     }
 
-    AuthEngine.user = userData.user;
+    nextUser = userData.user;
     const { data: profile, error: profileError } = await AuthEngine.client
       .from('profiles')
       .select('id, email, display_name, account_role')
@@ -150,13 +165,21 @@ class AuthEngine {
 
     if (profileError) {
       console.warn('No se pudo leer el perfil cloud:', profileError);
-      AuthEngine.profile = await AuthEngine.readCachedProfile(userData.user.id);
+      // Solo una falla real de conectividad habilita el rol previamente
+      // verificado. Errores de permisos o servidor bloquean el workspace.
+      if (AuthEngine.isNetworkError(profileError)) {
+        nextProfile = await AuthEngine.readCachedProfile(userData.user.id);
+      } else {
+        await AuthEngine.clearCachedProfile(userData.user.id);
+        nextProfile = null;
+      }
     } else {
-      AuthEngine.profile = profile || null;
-      await AuthEngine.saveCachedProfile(AuthEngine.profile);
+      nextProfile = profile || null;
+      if (nextProfile) await AuthEngine.saveCachedProfile(nextProfile);
+      else await AuthEngine.clearCachedProfile(userData.user.id);
     }
 
-    AuthEngine.updateAccessButton();
+    return AuthEngine.commitIdentity(nextUser, nextProfile, generation);
   }
 
   static retryIdentity({ silent = false } = {}) {
@@ -240,9 +263,21 @@ class AuthEngine {
     if (!userId || !window.GolfDatabase?.isAvailable) return null;
     try {
       const cached = await GolfDatabase.get(GOLF_DATABASE.STORES.SETTINGS, AuthEngine.profileCacheId(userId));
-      return cached?.value?.id === userId ? cached.value : null;
+      const verifiedAt = Date.parse(cached?.updatedAt || '');
+      const cacheIsCurrent = Number.isFinite(verifiedAt)
+        && Date.now() - verifiedAt <= AuthEngine.PROFILE_CACHE_MAX_AGE_MS;
+      return cached?.value?.id === userId && cacheIsCurrent ? cached.value : null;
     } catch (error) {
       return null;
+    }
+  }
+
+  static async clearCachedProfile(userId) {
+    if (!userId || !window.GolfDatabase?.isAvailable) return;
+    try {
+      await GolfDatabase.delete(GOLF_DATABASE.STORES.SETTINGS, AuthEngine.profileCacheId(userId));
+    } catch (error) {
+      console.warn('No se pudo invalidar el rol guardado:', error);
     }
   }
 
@@ -260,16 +295,22 @@ class AuthEngine {
       return;
     }
 
+    const icon = button.querySelector('.topbar-action-icon');
+    const setIcon = (value) => {
+      if (icon) icon.textContent = value;
+      else button.textContent = value;
+    };
+
     if (!AuthEngine.client) {
-      button.textContent = '✉️';
+      setIcon('✉️');
       button.title = 'El acceso por email no está disponible ahora';
       button.setAttribute('aria-label', button.title);
     } else if (AuthEngine.user) {
-      button.textContent = AuthEngine.isCoach() ? '👤' : '✉️';
+      setIcon(AuthEngine.isCoach() ? '👤' : '✉️');
       button.title = `${AuthEngine.roleLabel()}: abrir cuenta`;
       button.setAttribute('aria-label', button.title);
     } else {
-      button.textContent = '✉️';
+      setIcon('✉️');
       button.title = 'Acceder por email';
       button.setAttribute('aria-label', button.title);
     }
@@ -286,7 +327,7 @@ class AuthEngine {
           <div><span class="badge badge-gold">Acceso</span><h3 style="margin-top:0.3rem;">Acceso no disponible</h3></div>
           <button class="modal-close" onclick="App.closeModal()">&times;</button>
         </div>
-        <p>La aplicación sigue disponible en modo local. Volvé a intentarlo cuando haya conexión.</p>
+        <p>Para proteger las fichas locales, el espacio permanece bloqueado hasta que podamos verificar tu cuenta. Volvé a intentarlo cuando haya conexión.</p>
       `);
       return;
     }
@@ -317,7 +358,7 @@ class AuthEngine {
       <div id="auth-status" role="status" aria-live="polite" style="min-height:1.25rem; font-size:0.84rem; color:var(--text-muted);"></div>
       <button class="btn btn-primary" id="auth-send-link-btn" style="width:100%; min-height:46px; margin-top:1rem;" onclick="AuthEngine.sendMagicLink()">Enviar enlace de acceso</button>
       <div class="offline-info-card" style="margin-top:1rem;">
-        <span>🔐</span><span>El acceso protege la cuenta cloud. El entrenador puede activar el respaldo desde el ícono ☁️ cuando lo necesite.</span>
+        <span>🔐</span><span>El acceso protege tanto la cuenta cloud como las fichas guardadas en este dispositivo. Luego podrás trabajar sin conexión con esta misma sesión.</span>
       </div>
     `);
 
@@ -485,9 +526,9 @@ class AuthEngine {
     } catch (error) {
       console.warn('No se pudo cerrar la sesión remota:', error);
     } finally {
-      AuthEngine.user = null;
-      AuthEngine.profile = null;
-      AuthEngine.updateAccessButton();
+      const generation = ++AuthEngine.identityGeneration;
+      await AuthEngine.commitIdentity(null, null, generation);
+      await window.CloudSync?.onAuthStateChanged?.();
       await window.PlayerPortal?.onAuthStateChanged?.();
       window.App?.closeModal();
       AuthEngine.toast('Sesión cerrada en este dispositivo.');
@@ -506,7 +547,7 @@ class AuthEngine {
     if (!status) return;
     status.textContent = message;
     status.style.color = type === 'error'
-      ? '#ef9a9a'
+      ? 'var(--status-error-text)'
       : type === 'success'
         ? 'var(--primary-300)'
         : 'var(--text-muted)';

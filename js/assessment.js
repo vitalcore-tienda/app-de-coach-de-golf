@@ -199,6 +199,7 @@ class AssessmentEngine {
   constructor() {
     this.currentStep = 0;
     this.userAnswers = {};
+    this.finishing = false;
   }
 
   // Assessments can be restored from older local records or imported data.
@@ -235,19 +236,21 @@ class AssessmentEngine {
     const saved = StorageManager.getAssessment();
     
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Diagnóstico 360° del Golfista</h2>
             <p>Evalúa tus 5 pilares clave para identificar tus mayores áreas de mejora y bajar tu hándicap.</p>
           </div>
-          <button class="btn btn-primary" onclick="AssessmentEngine.startQuiz()">
-            <span class="nav-icon">✨</span> ${saved.completed ? 'Repetir Evaluación' : 'Comenzar Test 360°'}
-          </button>
+          <div class="view-actions">
+            <button class="btn btn-primary" onclick="AssessmentEngine.startQuiz()">
+              <span class="nav-icon">✨</span> ${saved.completed ? 'Repetir Evaluación' : 'Comenzar Test 360°'}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="grid-2" style="margin-bottom: 2rem;">
+      <div class="grid-2 layout-section">
         <div class="card">
           <div class="card-header">
             <div class="card-title-group">
@@ -329,9 +332,10 @@ class AssessmentEngine {
       const c = getCoord(p.val, idx);
       return `${c.x},${c.y}`;
     }).join(' ');
+    const accessibleSummary = pillars.map((pillar) => `${pillar.label}: ${pillar.val} por ciento`).join(', ');
 
     return `
-      <svg viewBox="0 0 ${size} ${size}" style="width: 100%; height: 100%;">
+      <svg viewBox="0 0 ${size} ${size}" style="width: 100%; height: 100%;" role="img" aria-label="Radar de habilidades. ${accessibleSummary}">
         ${gridCircles}
         ${axisLines}
         <polygon points="${pointsStr}" fill="rgba(212, 175, 55, 0.25)" stroke="var(--gold-400)" stroke-width="2.5" />
@@ -438,7 +442,7 @@ class AssessmentEngine {
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
 
-      <div class="progress-bar-container" style="margin-bottom: 1.75rem;">
+      <div class="progress-bar-container" style="margin-bottom: 1.75rem;" role="progressbar" aria-label="Progreso del diagnóstico" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progressPct}">
         <div class="progress-bar-fill" style="width: ${progressPct}%;"></div>
       </div>
 
@@ -448,10 +452,10 @@ class AssessmentEngine {
 
       <div style="display: flex; flex-direction: column; gap: 0.85rem; margin-bottom: 2rem;">
         ${q.options.map((opt, idx) => `
-          <div class="routine-step" onclick="window.currentQuizInstance.selectAnswer(${opt.score})" style="cursor: pointer;">
-            <div class="step-num">${String.fromCharCode(65 + idx)}</div>
-            <div class="step-text" style="font-size: 0.95rem;">${opt.text}</div>
-          </div>
+          <button class="routine-step" type="button" onclick="window.currentQuizInstance.selectAnswer(${opt.score})">
+            <span class="step-num" aria-hidden="true">${String.fromCharCode(65 + idx)}</span>
+            <span class="step-text" style="font-size: 0.95rem;">${opt.text}</span>
+          </button>
         `).join('')}
       </div>
 
@@ -467,6 +471,7 @@ class AssessmentEngine {
   }
 
   selectAnswer(score) {
+    if (this.finishing || this.currentStep >= ASSESSMENT_QUESTIONS.length) return;
     const q = ASSESSMENT_QUESTIONS[this.currentStep];
     if (!this.userAnswers[q.category]) {
       this.userAnswers[q.category] = [];
@@ -492,7 +497,9 @@ class AssessmentEngine {
     }
   }
 
-  finishQuiz() {
+  async finishQuiz() {
+    if (this.finishing) return;
+    this.finishing = true;
     // Calculate category averages
     const calcCat = (cat) => {
       const arr = this.userAnswers[cat] || [50];
@@ -514,14 +521,35 @@ class AssessmentEngine {
       lastDate: new Date().toISOString()
     };
 
-    StorageManager.saveAssessment(assessmentData);
-    App.closeModal();
-    App.showToast('✅ ¡Diagnóstico 360° completado con éxito!');
+    try {
+      const modalContent = document.getElementById('global-modal-content');
+      if (modalContent) {
+        modalContent.innerHTML = `
+          <div class="modal-header"><div><span class="badge badge-gold">Guardando</span><h3 style="margin-top:0.35rem;">Finalizando diagnóstico</h3></div></div>
+          <p style="color:var(--text-muted);">Estamos guardando las respuestas completas antes de actualizar el panel.</p>
+        `;
+      }
+      await StorageManager.saveAssessment(assessmentData);
+      App.closeModal();
+      App.showSaveConfirmation('Diagnóstico 360° guardado', 'El informe y las recomendaciones quedaron actualizados.');
 
-    // Re-render views
-    AssessmentEngine.renderDiagnosticView();
-    if (window.App && App.renderDashboard) {
-      App.renderDashboard();
+      // Re-render views
+      AssessmentEngine.renderDiagnosticView();
+      if (window.App && App.renderDashboard) {
+        App.renderDashboard();
+      }
+    } catch (error) {
+      console.error('No se pudo guardar el diagnóstico:', error);
+      this.finishing = false;
+      const modalContent = document.getElementById('global-modal-content');
+      if (modalContent) {
+        modalContent.innerHTML = `
+          <div class="modal-header"><div><span class="badge badge-gold">Respuestas conservadas</span><h3 style="margin-top:0.35rem;">No se pudo guardar</h3></div><button class="modal-close" onclick="App.closeModal()">&times;</button></div>
+          <p style="color:var(--text-muted); line-height:1.5;">Tus respuestas siguen en esta ventana. Reintentá el guardado sin completar nuevamente el diagnóstico.</p>
+          <button class="btn btn-primary" style="width:100%; margin-top:1rem;" onclick="window.currentQuizInstance.finishQuiz()">Reintentar guardado</button>
+        `;
+      }
+      App.showToast('No se pudo guardar el diagnóstico. Intentá nuevamente.');
     }
   }
 }

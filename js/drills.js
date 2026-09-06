@@ -154,6 +154,7 @@ class DrillsEngine {
   static timerInitial = 1200;
   static isTimerRunning = false;
   static isBreakPhase = false;
+  static pendingProgress = new Set();
 
   static renderDrillsView() {
     const container = document.getElementById('drills-container');
@@ -162,13 +163,13 @@ class DrillsEngine {
     const progress = StorageManager.getDrillsProgress();
 
     container.innerHTML = `
-      <div class="card card-gold-glow" style="margin-bottom: 2rem;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1.25rem;">
-          <div>
+      <div class="card card-gold-glow view-hero">
+        <div class="view-hero-row">
+          <div class="view-heading-copy">
             <h2>Planes de Entrenamiento & Drills</h2>
             <p>Ejercicios específicos con propósito estructurado para corregir fallos y afianzar consistencia.</p>
           </div>
-          <div style="display: flex; gap: 0.75rem;">
+          <div class="view-actions">
             <button class="btn btn-primary" onclick="DrillsEngine.openTimerModal()">
               ⏱️ Abrir Temporizador Pomodoro de Golf
             </button>
@@ -177,13 +178,13 @@ class DrillsEngine {
       </div>
 
       <!-- Category Filter Pills -->
-      <div class="filter-bar">
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'all' ? 'active' : ''}" onclick="DrillsEngine.setFilter('all')">Todos</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'swing' ? 'active' : ''}" onclick="DrillsEngine.setFilter('swing')">🏌️ Swing & Maderas</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'putting' ? 'active' : ''}" onclick="DrillsEngine.setFilter('putting')">⛳ Putting</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'chipping' ? 'active' : ''}" onclick="DrillsEngine.setFilter('chipping')">🎯 Chipping & Wedges</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'bunker' ? 'active' : ''}" onclick="DrillsEngine.setFilter('bunker')">🏖️ Bunker</button>
-        <button class="filter-pill ${DrillsEngine.currentFilter === 'fitness' ? 'active' : ''}" onclick="DrillsEngine.setFilter('fitness')">💪 Físico & Movilidad</button>
+      <div class="filter-bar" role="group" aria-label="Filtrar planes por categoría">
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'all' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'all'}" onclick="DrillsEngine.setFilter('all')">Todos</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'swing' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'swing'}" onclick="DrillsEngine.setFilter('swing')">🏌️ Swing & Maderas</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'putting' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'putting'}" onclick="DrillsEngine.setFilter('putting')">⛳ Putting</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'chipping' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'chipping'}" onclick="DrillsEngine.setFilter('chipping')">🎯 Chipping & Wedges</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'bunker' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'bunker'}" onclick="DrillsEngine.setFilter('bunker')">🏖️ Bunker</button>
+        <button class="filter-pill ${DrillsEngine.currentFilter === 'fitness' ? 'active' : ''}" type="button" aria-pressed="${DrillsEngine.currentFilter === 'fitness'}" onclick="DrillsEngine.setFilter('fitness')">💪 Físico & Movilidad</button>
       </div>
 
       <!-- Drills Grid -->
@@ -214,11 +215,11 @@ class DrillsEngine {
       return `
         <div class="card drill-card ${isCompleted ? 'completed-drill' : ''}" style="${isCompleted ? 'border-left-color: var(--color-success);' : ''}">
           <div>
-            <div class="card-header" style="margin-bottom: 0.5rem;">
+            <div class="card-header">
               <span class="badge badge-gold">${drill.categoryName}</span>
               <span class="badge badge-blue">⏱️ ${drill.duration} min</span>
             </div>
-            <h3 style="font-size: 1.1rem; margin-bottom: 0.4rem; color: var(--text-main);">${drill.title}</h3>
+            <h3 class="content-title">${drill.title}</h3>
             
             <div class="drill-purpose">
               <strong>Propósito:</strong> ${drill.purpose}
@@ -247,21 +248,33 @@ class DrillsEngine {
     }).join('');
   }
 
-  static toggleDrillComplete(drillId) {
+  static async toggleDrillComplete(drillId) {
+    if (DrillsEngine.pendingProgress.has(drillId)) return;
+    DrillsEngine.pendingProgress.add(drillId);
     const progress = StorageManager.getDrillsProgress();
     if (!progress[drillId]) {
       progress[drillId] = { completed: false, reps: 0, lastDate: new Date().toISOString() };
     }
     progress[drillId].completed = !progress[drillId].completed;
     progress[drillId].lastDate = new Date().toISOString();
-    StorageManager.saveDrillsProgress(progress);
-
-    App.showToast(progress[drillId].completed ? '🎉 ¡Drill completado y registrado!' : 'Drill marcado como pendiente.');
-    DrillsEngine.renderDrillsView();
-    if (window.App && App.renderDashboard) App.renderDashboard();
+    try {
+      await StorageManager.saveDrillsProgress(progress);
+      App.showSaveConfirmation(
+        progress[drillId].completed ? 'Drill completado' : 'Estado del drill actualizado',
+        progress[drillId].completed ? 'El progreso quedó registrado en la ficha.' : 'El ejercicio volvió a quedar pendiente.'
+      );
+      DrillsEngine.renderDrillsView();
+      if (window.App && App.renderDashboard) App.renderDashboard();
+    } catch (error) {
+      console.error('No se pudo guardar el progreso:', error);
+      App.showToast('No se pudo guardar el progreso. Intentá nuevamente.');
+    } finally {
+      DrillsEngine.pendingProgress.delete(drillId);
+    }
   }
 
   static startDrillWithTimer(drillId, minutes) {
+    DrillsEngine.stopTimer();
     DrillsEngine.timerSeconds = minutes * 60;
     DrillsEngine.timerInitial = minutes * 60;
     DrillsEngine.openTimerModal();
@@ -304,11 +317,12 @@ class DrillsEngine {
         </div>
       </div>
 
-      <div style="margin-top: 1.5rem; text-align: center; font-size: 0.85rem; color: var(--text-muted);">
+      <div class="ui-icon-copy" style="margin-top: 1.5rem; text-align: center; font-size: 0.85rem; color: var(--text-muted);">
         💡 <em>"20 minutos de práctica con intención y rutina valen más que 2 horas pegando 100 bolas en automático sin pensar." — SotaPar</em>
       </div>
     `;
 
+    App.setModalCleanup(() => DrillsEngine.stopTimer());
     App.openModal();
   }
 

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GolfCoach · prueba final de acceso y PWA</title>
+  <link rel="stylesheet" href="../css/style.css?test=v25">
+  <link rel="stylesheet" href="../css/components.css?test=v25">
+</head>
+<body>
+  <pre id="result">Ejecutando…</pre>
+  <div class="app-container">
+    <button id="install-app-btn" type="button">Instalar</button>
+    <button id="auth-access-btn" type="button"><span class="topbar-action-icon"></span></button>
+    <main id="main-content"><div id="player-portal-container"></div></main>
+  </div>
+  <nav id="player-bottom-nav" hidden></nav>
+  <div id="global-modal" aria-hidden="true"><div id="global-modal-content" role="dialog"></div></div>
+
+  <script>
+    const settings = new Map();
+    window.GOLF_DATABASE = { STORES: { SETTINGS: 'settings' } };
+    window.GolfDatabase = {
+      isAvailable: true,
+      async put(_store, value) { settings.set(value.id, structuredClone(value)); },
+      async get(_store, id) { return settings.has(id) ? structuredClone(settings.get(id)) : null; },
+      async delete(_store, id) { settings.delete(id); }
+    };
+    window.STORAGE_KEYS = { THEME: 'theme' };
+    window.StorageManager = {
+      workspaceOwnerId: null,
+      async unlockWorkspace(ownerId) { this.workspaceOwnerId = ownerId; },
+      lockWorkspace() { this.workspaceOwnerId = null; },
+      isWorkspaceUnlocked() { return Boolean(this.workspaceOwnerId); },
+      isDemoPlayer() { return false; },
+      getActivePlayerId() { return null; },
+      getProfile() { return null; },
+      get(_key, fallback) { return fallback; }
+    };
+    window.CloudSync = { updateButton() {}, async onAuthStateChanged() {} };
+    window.App = {
+      ready: true,
+      currentView: 'dashboard',
+      openModal() {
+        document.getElementById('global-modal').classList.add('active');
+        document.getElementById('global-modal').setAttribute('aria-hidden', 'false');
+      },
+      closeModal() {
+        document.getElementById('global-modal').classList.remove('active');
+        document.getElementById('global-modal').setAttribute('aria-hidden', 'true');
+      },
+      showToast() {}, updateWorkspaceContext() {}, async onWorkspaceAccessChanged() {}
+    };
+  </script>
+  <script src="../js/utils.js?test=v25"></script>
+  <script src="../js/pwa.js?test=v25"></script>
+  <script src="../js/player-portal.js?test=v25"></script>
+  <script src="../js/auth.js?test=v25"></script>
+  <script>
+    window.addEventListener('load', async () => {
+      const result = document.getElementById('result');
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+      const originalOnline = navigator.onLine;
+      const setOnline = (value) => Object.defineProperty(navigator, 'onLine', { configurable: true, value });
+
+      try {
+        const manifestResponse = await fetch('../manifest.json');
+        const manifest = await manifestResponse.json();
+        assert(manifestResponse.ok, 'El manifiesto PWA se puede descargar');
+        assert(manifest.display === 'standalone' && manifest.scope === './', 'La PWA se abre como aplicación dentro de su propio alcance');
+        assert(manifest.start_url === './?source=pwa', 'El acceso instalado abre la ruta inicial de GolfCoach');
+        assert(manifest.icons.some((icon) => icon.sizes === '192x192' && icon.purpose === 'any'), 'El manifiesto incluye el icono Android de 192 px');
+        assert(manifest.icons.some((icon) => icon.sizes === '512x512' && icon.purpose === 'maskable'), 'El manifiesto incluye un icono adaptable de 512 px');
+        for (const icon of manifest.icons) {
+          const response = await fetch(new URL(`../${icon.src}`, location.href));
+          assert(response.ok, `El recurso ${icon.src} existe`);
+        }
+
+        const workerResponse = await fetch('../service-worker.js');
+        const workerSource = await workerResponse.text();
+        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v26"), 'El service worker publicado usa la versión de caché esperada');
+        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=26'"), 'El caché offline incluye manifiesto y acceso por correo');
+        assert(workerSource.includes('networkFirstNavigation') && workerSource.includes('cacheFirst'), 'La navegación cae al caché y los recursos locales se reutilizan offline');
+
+        const originalIsIOS = PWAEngine.isIOS;
+        PWAEngine.isIOS = () => true;
+        PWAEngine.showInstallGuide();
+        assert(document.getElementById('global-modal-content').textContent.includes('Safari'), 'iPhone recibe instrucciones específicas para Safari');
+        assert(document.getElementById('global-modal-content').textContent.includes('Agregar a pantalla de inicio'), 'iPhone explica cómo crear el acceso instalado');
+        PWAEngine.isIOS = () => false;
+        PWAEngine.showInstallGuide();
+        assert(document.getElementById('global-modal-content').textContent.includes('Chrome o Edge'), 'Android y computadora reciben instrucciones para Chrome o Edge');
+        assert(document.getElementById('global-modal-content').textContent.includes('tres puntos'), 'Android explica la instalación desde el menú del navegador');
+        PWAEngine.isIOS = originalIsIOS;
+
+        let installPromptCalls = 0;
+        PWAEngine.deferredInstallPrompt = {
+          prompt() { installPromptCalls += 1; },
+          userChoice: Promise.resolve({ outcome: 'accepted' })
+        };
+        await PWAEngine.promptInstall();
+        assert(installPromptCalls === 1, 'La instalación nativa invoca una sola vez el diálogo del navegador');
+        assert(PWAEngine.deferredInstallPrompt === null, 'Al aceptar la instalación se limpia el diálogo pendiente');
+
+        let magicLinkCalls = 0;
+        let magicLinkPayload = null;
+        AuthEngine.client = {
+          auth: {
+            async signInWithOtp(payload) {
+              magicLinkCalls += 1;
+              magicLinkPayload = payload;
+              return { error: null };
+            }
+          }
+        };
+        AuthEngine.renderSignInModal();
+        document.getElementById('auth-email-input').value = 'correo-invalido';
+        await AuthEngine.sendMagicLink();
+        assert(magicLinkCalls === 0, 'Un correo inválido no genera solicitudes de acceso');
+        assert(document.getElementById('auth-status').textContent.includes('válido'), 'El formulario explica el error de correo');
+
+        setOnline(false);
+        document.getElementById('auth-email-input').value = 'coach@example.test';
+        await AuthEngine.sendMagicLink();
+        assert(magicLinkCalls === 0, 'Sin conexión no se intenta enviar un Magic Link');
+        assert(document.getElementById('auth-status').textContent.includes('conexión'), 'El acceso informa que necesita conexión');
+
+        setOnline(true);
+        await AuthEngine.sendMagicLink();
+        assert(magicLinkCalls === 1, 'Con correo válido y conexión se solicita un Magic Link');
+        assert(magicLinkPayload.email === 'coach@example.test', 'La solicitud normaliza y conserva el correo ingresado');
+        assert(magicLinkPayload.options.shouldCreateUser === true, 'El primer acceso puede crear una cuenta pendiente de rol');
+        assert(magicLinkPayload.options.emailRedirectTo === 'https://adanbrilzgolf.com.ar/', 'El Magic Link vuelve exactamente al dominio oficial');
+        assert(document.getElementById('auth-status').textContent.includes('Revisá tu correo'), 'La interfaz confirma que el enlace fue solicitado');
+
+        const coachProfile = { id: 'coach-ready', email: 'coach@example.test', account_role: 'coach' };
+        await AuthEngine.saveCachedProfile(coachProfile);
+        assert((await AuthEngine.readCachedProfile('coach-ready'))?.account_role === 'coach', 'El rol verificado permite recuperar la sesión del entrenador offline');
+        const profileCacheId = AuthEngine.profileCacheId('coach-ready');
+        const expired = settings.get(profileCacheId);
+        expired.updatedAt = new Date(Date.now() - AuthEngine.PROFILE_CACHE_MAX_AGE_MS - 60_000).toISOString();
+        settings.set(profileCacheId, expired);
+        assert(await AuthEngine.readCachedProfile('coach-ready') === null, 'Un rol de entrenador vencido no abre fichas offline');
+
+        const portalData = {
+          player: { id: 'player-cloud', full_name: 'Golfista de Prueba', current_handicap: 14.2 },
+          handicapHistory: [], trainingAssignments: [], tournaments: [], rounds: [], goals: [],
+          legacyDrillProgress: {}, messages: [], fetchedAt: new Date().toISOString()
+        };
+        await PlayerPortal.saveCache(portalData, 'player-user-a');
+        assert((await PlayerPortal.readCache('player-user-a'))?.player?.id === 'player-cloud', 'El golfista recupera la última versión de su portal offline');
+        assert(await PlayerPortal.readCache('player-user-b') === null, 'El caché del portal queda separado por cuenta de golfista');
+
+        AuthEngine.user = { id: 'player-user-a', email: 'player@example.test' };
+        AuthEngine.profile = { id: 'player-user-a', account_role: 'player' };
+        PlayerPortal.active = true;
+        PlayerPortal.loadGeneration = 7;
+        let renderedOfflinePortal = false;
+        const originalRender = PlayerPortal.render;
+        PlayerPortal.render = () => { renderedOfflinePortal = true; };
+        setOnline(false);
+        await PlayerPortal.performLoad({ userId: 'player-user-a', generation: 7 });
+        assert(renderedOfflinePortal && PlayerPortal.data?.fromCache === true, 'Una sesión de golfista vuelve a abrir su portal desde caché sin conexión');
+        PlayerPortal.render = originalRender;
+
+        setOnline(originalOnline);
+        result.dataset.status = 'passed';
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+      } catch (error) {
+        setOnline(originalOnline);
+        result.dataset.status = 'failed';
+        result.textContent = JSON.stringify({ passed: false, checks, error: error.message }, null, 2);
+      }
+    });
+  </script>
+</body>
+</html>

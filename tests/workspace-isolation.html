@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>GolfCoach · prueba de aislamiento local</title>
+</head>
+<body>
+  <h1>Prueba de aislamiento local</h1>
+  <pre id="result">Ejecutando…</pre>
+
+  <script src="../js/utils.js?test=v25"></script>
+  <script src="../js/database.js?test=v25"></script>
+  <script src="../js/storage.js?test=v25"></script>
+  <script src="../js/rounds.js?test=v25"></script>
+  <script>
+    (async () => {
+      const result = document.getElementById('result');
+      const token = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      const ownerA = `test-owner-a-${token}`;
+      const ownerB = `test-owner-b-${token}`;
+      const checks = [];
+      const assert = (condition, label) => {
+        checks.push({ label, passed: Boolean(condition) });
+        if (!condition) throw new Error(label);
+      };
+
+      try {
+        await StorageManager.initialize();
+        assert(GolfUtils.localDateISO(new Date(2026, 7, 26, 23, 30)) === '2026-08-26', 'Las fechas usan el calendario local');
+        RoundsEngine.initHoleData(18);
+        assert(
+          RoundsEngine.holeData.every((hole) => hole.strokes === null && hole.putts === null && !hole.completed),
+          'Una ronda nueva no contiene scores ficticios'
+        );
+        await StorageManager.unlockWorkspace(ownerA);
+        assert((await StorageManager.getPlayers()).length === 0, 'Un workspace nuevo empieza vacío');
+
+        const playerA = await StorageManager.createPlayer({
+          name: `Golfista A ${token}`,
+          handicap: 18,
+          targetHandicap: 12,
+          dominantHand: 'Diestro'
+        });
+        await StorageManager.saveGoals([{ id: `goal-${token}`, title: 'Meta privada A', progress: 10 }]);
+
+        await GolfDatabase.put(GOLF_DATABASE.STORES.HANDICAP_HISTORY, {
+          id: `foreign-hcp-${token}`, playerId: playerA.id, ownerId: ownerB,
+          date: '2026-08-01', handicap: 3, createdAt: new Date().toISOString()
+        });
+        await GolfDatabase.put(GOLF_DATABASE.STORES.TOURNAMENTS, {
+          id: `foreign-tournament-${token}`, playerId: playerA.id, ownerId: ownerB,
+          name: 'Torneo privado B', startDate: '2026-08-02'
+        });
+        await GolfDatabase.saveRound({
+          id: `foreign-round-${token}`, playerId: playerA.id, ownerId: ownerB,
+          course: 'Campo privado B', date: '2026-08-03', holes: []
+        });
+
+        StorageManager.lockWorkspace();
+        assert(StorageManager.getProfile() === null, 'Bloquear limpia la ficha activa de memoria');
+
+        await StorageManager.unlockWorkspace(ownerB);
+        assert((await StorageManager.getPlayers()).length === 0, 'El entrenador B no ve fichas del entrenador A');
+        assert(!(await StorageManager.ownsPlayer(playerA.id)), 'El entrenador B no puede operar sobre la ficha A');
+
+        await StorageManager.unlockWorkspace(ownerA);
+        const visibleToA = await StorageManager.getPlayers();
+        assert(visibleToA.length === 1 && visibleToA[0].id === playerA.id, 'El entrenador A recupera su ficha');
+        assert(StorageManager.getGoals()[0]?.title === 'Meta privada A', 'Los datos asociados vuelven con el dueño correcto');
+        assert(!StorageManager.getRounds().some((round) => round.ownerId === ownerB), 'Las rondas con otro ownerId no se cargan');
+        assert(!(await StorageManager.getHandicapHistory()).some((entry) => entry.ownerId === ownerB), 'El hándicap de otra cuenta no se carga');
+        assert(!(await StorageManager.getTournaments()).some((entry) => entry.ownerId === ownerB), 'Los torneos de otra cuenta no se cargan');
+
+        const legacyId = `legacy-player-${token}`;
+        await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYERS, {
+          id: legacyId,
+          name: `Ficha anterior ${token}`,
+          ownerId: null,
+          handicap: 22,
+          targetHandicap: 16,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYER_DATA, {
+          id: `${legacyId}:${STORAGE_KEYS.GOALS}`,
+          playerId: legacyId,
+          ownerId: null,
+          key: STORAGE_KEYS.GOALS,
+          value: [{ id: `legacy-goal-${token}`, title: 'Meta anterior' }],
+          updatedAt: new Date().toISOString()
+        });
+        await StorageManager.refreshUnclaimedLegacyCount();
+        const ownerC = `test-owner-c-${token}`;
+        await StorageManager.unlockWorkspace(ownerC);
+        assert((await StorageManager.getPlayers()).length === 0, 'Una ficha sin dueño no se entrega automáticamente');
+        const claimed = await StorageManager.claimLegacyWorkspace();
+        assert(claimed >= 1, 'El entrenador puede reclamar datos anteriores de forma explícita');
+        assert((await StorageManager.getPlayers()).some((player) => player.id === legacyId), 'La ficha reclamada queda vinculada al entrenador');
+        assert(StorageManager.getGoals().some((goal) => goal.title === 'Meta anterior'), 'El reclamo conserva los datos deportivos asociados');
+
+        const linkedOwner = `linked-owner-${token}`;
+        const linkedId = `linked-player-${token}`;
+        await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYERS, {
+          id: linkedId,
+          name: `Ficha vinculada ${token}`,
+          ownerId: null,
+          cloudOwnerId: linkedOwner,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        await StorageManager.migrateExistingCloudOwnership();
+        await StorageManager.unlockWorkspace(ownerC);
+        assert(!(await StorageManager.getPlayers()).some((player) => player.id === linkedId), 'Otra cuenta no puede reclamar una ficha ya vinculada a la nube');
+        await StorageManager.unlockWorkspace(linkedOwner);
+        assert((await StorageManager.getPlayers()).some((player) => player.id === linkedId), 'La ficha vinculada vuelve únicamente con su dueño cloud');
+
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'passed';
+        result.textContent = JSON.stringify({ passed: true, checks }, null, 2);
+      } catch (error) {
+        StorageManager.lockWorkspace();
+        result.dataset.status = 'failed';
+        result.textContent = JSON.stringify({ passed: false, checks, error: error.message }, null, 2);
+      }
+    })();
+  </script>
+</body>
+</html>
