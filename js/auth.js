@@ -387,7 +387,7 @@ class AuthEngine {
         <p style="margin-top:1rem; color:var(--text-muted); line-height:1.5;">Estamos terminando de asociar tu perfil. Esperá unos segundos y volvé a abrir esta ventana antes de usar un código de activación.</p>
       ` : ''}
       ${!AuthEngine.isCoach() && !profilePending ? `
-        <button class="btn btn-secondary" style="width:100%; min-height:44px; margin-top:1rem;" onclick="AuthEngine.showInitialCoachCodeForm()">Tengo el código del primer entrenador</button>
+        <button class="btn btn-secondary" style="width:100%; min-height:44px; margin-top:1rem;" onclick="AuthEngine.showCoachInviteCodeForm()">Tengo un código de entrenador</button>
       ` : ''}
       ${AuthEngine.isCoach() ? `
         <button class="btn btn-secondary" style="width:100%; min-height:44px; margin-top:1rem;" onclick="CloudSync.openSyncModal()">☁️ Respaldo y sincronización cloud</button>
@@ -396,28 +396,28 @@ class AuthEngine {
     `);
   }
 
-  static showInitialCoachCodeForm() {
+  static showCoachInviteCodeForm() {
     if (!AuthEngine.user || AuthEngine.isCoach()) return;
 
     AuthEngine.renderModal(`
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
         <div>
-          <span class="badge badge-gold">Configuración inicial</span>
-          <h3 style="margin-top:0.3rem;">Activar primer entrenador</h3>
+          <span class="badge badge-gold">Invitación de entrenador</span>
+          <h3 style="margin-top:0.3rem;">Activar cuenta de entrenador</h3>
         </div>
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
-      <p style="color:var(--text-muted); line-height:1.55; margin-top:-0.45rem;">Ingresá el código único que recibió la persona responsable. Se consume al activarse y no se guarda en este dispositivo.</p>
+      <p style="color:var(--text-muted); line-height:1.55; margin-top:-0.45rem;">Ingresá el código único asociado a tu correo. Se consume al activarse y no se guarda en este dispositivo.</p>
       <div class="form-group" style="margin-top:1.2rem;">
-        <label class="form-label" for="auth-initial-coach-code">Código de activación</label>
-        <input class="form-control" id="auth-initial-coach-code" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="GOLF-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX">
+        <label class="form-label" for="auth-coach-invite-code">Código de invitación</label>
+        <input class="form-control" id="auth-coach-invite-code" type="password" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="GOLF-XXXXXXXX-XXXXXXXX-XXXXXXXX-XXXXXXXX">
       </div>
       <div id="auth-status" role="status" aria-live="polite" style="min-height:1.25rem; font-size:0.84rem; color:var(--text-muted);"></div>
-      <button class="btn btn-primary" id="auth-claim-coach-btn" style="width:100%; min-height:46px; margin-top:1rem;" onclick="AuthEngine.claimInitialCoach()">Activar cuenta de entrenador</button>
+      <button class="btn btn-primary" id="auth-claim-coach-btn" style="width:100%; min-height:46px; margin-top:1rem;" onclick="AuthEngine.claimCoachAccess()">Activar cuenta de entrenador</button>
     `);
 
-    window.setTimeout(() => document.getElementById('auth-initial-coach-code')?.focus(), 0);
+    window.setTimeout(() => document.getElementById('auth-coach-invite-code')?.focus(), 0);
   }
 
   static async sendMagicLink() {
@@ -465,10 +465,10 @@ class AuthEngine {
     }
   }
 
-  static async claimInitialCoach() {
+  static async claimCoachAccess() {
     if (!AuthEngine.client || !AuthEngine.user) return;
 
-    const input = document.getElementById('auth-initial-coach-code');
+    const input = document.getElementById('auth-coach-invite-code');
     const button = document.getElementById('auth-claim-coach-btn');
     const setupCode = input?.value?.trim().toUpperCase() || '';
 
@@ -490,7 +490,7 @@ class AuthEngine {
     AuthEngine.setStatus('');
 
     try {
-      const { error } = await AuthEngine.client.rpc('claim_initial_coach', {
+      const { error } = await AuthEngine.client.rpc('claim_coach_access', {
         p_setup_code: setupCode
       });
       if (error) throw error;
@@ -559,8 +559,10 @@ class AuthEngine {
     if (message.includes('rate limit') || message.includes('security purposes')) return 'Esperá unos segundos antes de solicitar otro enlace.';
     if (message.includes('redirect') || message.includes('not allowed')) return 'Falta habilitar la URL de esta aplicación en la configuración de Auth.';
     if (context === 'claim-coach') {
-      if (message.includes('already been configured')) return 'El primer entrenador ya fue configurado.';
-      if (message.includes('invalid setup code')) return 'El código no es válido o ya fue utilizado.';
+      if (message.includes('invalid or expired coach invitation') || message.includes('invalid setup code')) return 'El código no es válido para este correo, venció o ya fue utilizado.';
+      if (message.includes('confirmed email')) return 'Primero confirmá tu correo desde el enlace de acceso.';
+      if (message.includes('already linked to a golfer')) return 'Esta cuenta ya está vinculada a un perfil de golfista.';
+      if (message.includes('already been configured')) return 'El código inicial ya fue utilizado.';
       if (message.includes('not been configured')) return 'El código de activación aún no fue configurado.';
       return 'No se pudo activar la cuenta. Verificá el código e intentá nuevamente.';
     }

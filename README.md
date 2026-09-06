@@ -46,7 +46,7 @@ coach-de-golf/
     ├── rounds.js                # Scorecard interactivo de 9/18 hoyos y estadísticas avanzadas
     ├── mentor.js                # Chat interactivo con el Coach, metas SMART y diario del jugador
     ├── pwa.js                   # Instalación, atajos y aviso de conectividad
-    ├── auth.js                  # Magic Link, sesión y activación del primer entrenador
+    ├── auth.js                  # Magic Link, sesión e invitaciones de entrenadores
     ├── icons.js                 # Familia SVG consistente para controles y navegación
     ├── player-portal.js         # Vista privada del golfista y mensajería con su entrenador
     └── app.js                   # Controlador principal, cambio de temas y gestión de modales
@@ -134,7 +134,7 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 - El entrenador crea la ficha y queda asignado automáticamente al jugador.
 - El golfista entra con un enlace de un solo uso enviado a su correo; al confirmar el mismo mail que figura en su ficha, queda vinculado a ella sin duplicar datos.
 - Las reglas RLS impiden que un golfista consulte a otros jugadores, y que un entrenador acceda a jugadores que no tiene asignados.
-- El rol de primer entrenador se protege con un código de configuración de una sola vez; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
+- Cada entrenador se activa con un código de un solo uso vinculado a su correo; ninguna clave administrativa se publica en la app, el repositorio o GitHub Pages.
 - El acceso se abre desde la acción de cuenta de la barra superior. No utiliza contraseña: Supabase envía un Magic Link y la app conserva la sesión del dispositivo mediante su cliente oficial versionado localmente.
 
 ### Experiencia según el rol
@@ -146,6 +146,6 @@ Para compartir una ficha entre entrenador y golfista, el diseño preparado usa S
 
 Las migraciones de la plataforma dedicada GolfCoach están en [`database/supabase/migrations`](database/supabase/migrations): estructura, endurecimiento del primer entrenador, seguridad adicional e índices. El proyecto de Supabase debe ser exclusivo de GolfCoach; no se deben aplicar estas migraciones a otras apps de VitalCore. En Supabase Auth, Site URL debe ser `https://adanbrilzgolf.com.ar/` y la misma dirección debe figurar en Redirect URLs. La dirección anterior de GitHub Pages puede conservarse temporalmente como redirección adicional durante la transición.
 
-Después de publicar esta versión, el primer entrenador inicia sesión con su mail, elige **Tengo el código del primer entrenador** e ingresa el código único entregado por la persona administradora. Si el dispositivo contiene fichas anteriores, primero debe elegir **Revisar fichas anteriores** y confirmar su vinculación. Luego toca ☁️ y elige **Activar respaldo y sincronizar**. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. El código se consume al activarse; guardalo de forma privada y nunca lo subas al repositorio.
+Después de publicar esta versión, cada entrenador inicia sesión con el correo autorizado, elige **Tengo un código de entrenador** e ingresa su invitación. La base compara tanto el código como el correo confirmado, y consume la invitación al activarse. Si el dispositivo contiene fichas anteriores, primero debe elegir **Revisar fichas anteriores** y confirmar su vinculación. Luego toca ☁️ y elige **Activar respaldo y sincronizar**. Desde entonces, los cambios del entrenador se encolan localmente y se respaldan al recuperar conexión. Guardá cada código de forma privada y nunca lo subas al repositorio.
 
 No subas nombres, teléfonos, correos, códigos de activación ni claves administrativas al repositorio: GitHub Pages es público. La app usa solamente una publishable key en el navegador; las políticas RLS de PostgreSQL autorizan cada dato en el servidor.

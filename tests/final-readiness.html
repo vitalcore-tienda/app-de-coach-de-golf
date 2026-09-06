@@ -82,8 +82,8 @@
 
         const workerResponse = await fetch('../service-worker.js');
         const workerSource = await workerResponse.text();
-        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v26"), 'El service worker publicado usa la versión de caché esperada');
-        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=26'"), 'El caché offline incluye manifiesto y acceso por correo');
+        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v27"), 'El service worker publicado usa la versión de caché esperada');
+        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=27'"), 'El caché offline incluye manifiesto y acceso por correo');
         assert(workerSource.includes('networkFirstNavigation') && workerSource.includes('cacheFirst'), 'La navegación cae al caché y los recursos locales se reutilizan offline');
 
         const originalIsIOS = PWAEngine.isIOS;
@@ -136,6 +136,26 @@
         assert(magicLinkPayload.options.shouldCreateUser === true, 'El primer acceso puede crear una cuenta pendiente de rol');
         assert(magicLinkPayload.options.emailRedirectTo === 'https://adanbrilzgolf.com.ar/', 'El Magic Link vuelve exactamente al dominio oficial');
         assert(document.getElementById('auth-status').textContent.includes('Revisá tu correo'), 'La interfaz confirma que el enlace fue solicitado');
+
+        let coachClaimRpc = null;
+        const originalRefreshIdentity = AuthEngine.refreshIdentity;
+        AuthEngine.user = { id: 'invited-coach', email: 'invited@example.test' };
+        AuthEngine.profile = { id: 'invited-coach', email: 'invited@example.test', account_role: 'player' };
+        AuthEngine.client.rpc = async (name, payload) => {
+          coachClaimRpc = { name, payload };
+          return { error: null };
+        };
+        AuthEngine.refreshIdentity = async () => {
+          AuthEngine.profile = { ...AuthEngine.profile, account_role: 'coach' };
+        };
+        AuthEngine.showCoachInviteCodeForm();
+        assert(document.getElementById('global-modal-content').textContent.includes('Código de invitación'), 'El alta adicional usa un formulario genérico para entrenadores');
+        document.getElementById('auth-coach-invite-code').value = 'golf-12345678-12345678-12345678-12345678';
+        await AuthEngine.claimCoachAccess();
+        assert(coachClaimRpc?.name === 'claim_coach_access', 'La invitación usa el RPC seguro para múltiples entrenadores');
+        assert(coachClaimRpc?.payload?.p_setup_code === 'GOLF-12345678-12345678-12345678-12345678', 'El código se normaliza antes de enviarse');
+        assert(AuthEngine.isCoach(), 'La activación confirma el nuevo rol antes de abrir el espacio de entrenador');
+        AuthEngine.refreshIdentity = originalRefreshIdentity;
 
         const coachProfile = { id: 'coach-ready', email: 'coach@example.test', account_role: 'coach' };
         await AuthEngine.saveCachedProfile(coachProfile);
