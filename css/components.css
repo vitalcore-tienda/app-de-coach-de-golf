@@ -1756,7 +1756,7 @@ textarea.form-control {
 
 .network-status {
   position: fixed;
-  z-index: 1100;
+  z-index: 990;
   left: 50%;
   bottom: calc(1rem + var(--sab));
   transform: translateX(-50%);

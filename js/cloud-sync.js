@@ -204,7 +204,7 @@ class CloudSync {
         <span>🔒</span><span>Solo tu cuenta de entrenador y los golfistas asignados pueden acceder a estos datos. La app sigue funcionando sin conexión.</span>
       </div>
       <div id="cloud-sync-status" class="sync-status-panel ${lastResult?.failed ? 'error' : ''}" role="status" aria-live="polite">${lastResult?.failed
-        ? `${pending || lastResult.failed} ficha${(pending || lastResult.failed) === 1 ? '' : 's'} pendiente${(pending || lastResult.failed) === 1 ? '' : 's'}. El último intento no pudo completarse; podés reintentar sin perder los datos locales.`
+        ? `${pending || lastResult.failed} ficha${(pending || lastResult.failed) === 1 ? '' : 's'} pendiente${(pending || lastResult.failed) === 1 ? '' : 's'}. ${AuthEngine.escapeHTML(lastResult.lastError || 'El último intento no pudo completarse; podés reintentar sin perder los datos locales.')}`
         : pending
           ? `${pending} ficha${pending === 1 ? '' : 's'} pendiente${pending === 1 ? '' : 's'} de respaldo.`
           : 'No hay cambios pendientes. El respaldo está actualizado.'}</div>
@@ -249,7 +249,7 @@ class CloudSync {
       const result = await CloudSync.flush();
       if (result.failed > 0) {
         const message = `Se respaldaron ${result.synced} ficha${result.synced === 1 ? '' : 's'}; quedaron ${result.pending || result.failed} para reintentar. Tus datos locales están seguros.`;
-        CloudSync.setModalStatus(message, 'error');
+        CloudSync.setModalStatus(`${message} ${result.lastError || ''}`, 'error');
         window.PWAEngine?.reportSyncIssue?.(message);
       } else {
         CloudSync.setModalStatus(`Respaldo actualizado: ${result.synced} ficha${result.synced === 1 ? '' : 's'} sincronizada${result.synced === 1 ? '' : 's'}.`, 'success');
@@ -668,6 +668,9 @@ class CloudSync {
   }
 
   static readableError(error) {
+    const code = String(error?.code || '');
+    if (code === '23514') return 'Un dato de la ficha o de una ronda no cumple las reglas de guardado. Revisá los valores cargados. Código: 23514.';
+    if (code === '23503') return 'Falta un registro relacionado con esta ficha. Código: 23503.';
     const kind = CloudSync.errorKind(error);
     if (kind === 'network') return 'No se pudo conectar con GolfCoach. El respaldo quedó en cola y se reintentará cuando haya conexión.';
     if (kind === 'permission') {
