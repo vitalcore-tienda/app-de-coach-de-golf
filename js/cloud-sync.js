@@ -364,12 +364,29 @@ class CloudSync {
       player_category: CloudSync.nullableText(player.playerCategory),
       notes: CloudSync.nullableText(player.notes)
     };
-    const { data, error } = await AuthEngine.client
-      .from('players')
-      .upsert(payload, { onConflict: 'created_by,client_record_id' })
-      .select('id')
-      .single();
+    // The AFTER INSERT trigger grants the coach access. Do not request
+    // RETURNING on a new row: its SELECT policy runs before that grant.
+    const findPlayer = () => AuthEngine.client.from('players')
+      .select('id').eq('created_by', ownerId)
+      .eq('client_record_id', String(player.id)).maybeSingle();
+    let { data, error } = await findPlayer();
     if (error) throw error;
+    let needsUpdate = Boolean(data);
+    if (!data) {
+      const inserted = await AuthEngine.client.from('players').insert(payload);
+      if (inserted.error && inserted.error.code !== '23505') throw inserted.error;
+      // A concurrent attempt may already have created this same local record.
+      needsUpdate = Boolean(inserted.error);
+      ({ data, error } = await findPlayer());
+      if (error) throw error;
+      if (!data) throw Object.assign(new Error('La ficha no está asignada a esta cuenta.'), { code: '42501' });
+    }
+    if (needsUpdate) {
+      const updated = await AuthEngine.client.from('players').update(payload)
+        .eq('id', data.id).eq('created_by', ownerId).select('id').single();
+      if (updated.error) throw updated.error;
+      data = updated.data;
+    }
 
     if (data?.id && (player.remoteId !== data.id || player.cloudOwnerId !== ownerId)) {
       await GolfDatabase.put(GOLF_DATABASE.STORES.PLAYERS, {
