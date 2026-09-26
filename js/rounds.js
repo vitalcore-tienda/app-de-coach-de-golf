@@ -265,10 +265,11 @@ class RoundsEngine {
   }
 
   static async openNewRoundModal() {
+    const student = Boolean(window.PlayerPortal?.active && PlayerPortal.isPlayerAccount() && PlayerPortal.data?.player?.id);
     const authenticatedWithoutCoachRole = Boolean(
       window.AuthEngine?.user && !window.AuthEngine?.isCoach?.()
     );
-    if (window.PlayerPortal?.active || authenticatedWithoutCoachRole) {
+    if (!student && (window.PlayerPortal?.active || authenticatedWithoutCoachRole)) {
       App.showToast('Registrar rondas está disponible únicamente en el panel del entrenador.');
       return;
     }
@@ -277,8 +278,8 @@ class RoundsEngine {
     const modal = document.getElementById('global-modal');
     const modalContent = document.getElementById('global-modal-content');
     if (!modal || !modalContent) return;
-    const playerId = StorageManager.getActivePlayerId();
-    const profile = StorageManager.getProfile();
+    const playerId = student ? PlayerPortal.data.player.id : StorageManager.getActivePlayerId();
+    const profile = student ? { name: PlayerPortal.data.player.full_name } : StorageManager.getProfile();
     const playerName = RoundsEngine.escapeHTML(profile?.name || 'Golfista');
 
     if (!playerId) {
@@ -288,18 +289,20 @@ class RoundsEngine {
 
     let tournaments = [];
     try {
-      tournaments = await StorageManager.getTournaments(playerId);
+      tournaments = student ? [] : await StorageManager.getTournaments(playerId);
     } catch (error) {
       console.warn('No se pudieron cargar los torneos para la ronda:', error);
     }
 
     // El nombre visible y el destino real deben pertenecer siempre a la misma
     // ficha, incluso si el entrenador cambia de golfista durante esta carga.
-    if (StorageManager.getActivePlayerId() !== playerId) {
+    if (student ? PlayerPortal.data?.player?.id !== playerId : StorageManager.getActivePlayerId() !== playerId) {
       App.showToast('Cambiaste de golfista. Abrí nuevamente la ronda para continuar.');
       return;
     }
     RoundsEngine.roundPlayerContext = {
+      student,
+      submissionId: crypto.randomUUID(),
       playerId,
       playerName: String(profile?.name || 'Golfista'),
       accountUserId: window.AuthEngine?.user?.id || null,
@@ -414,6 +417,9 @@ class RoundsEngine {
     `;
 
     RoundsEngine.updateLiveTotals();
+    if (student) {
+      document.getElementById('round-tournament-select').closest('.form-group').hidden = true;
+    }
     App.setModalCleanup(() => {
       RoundsEngine.roundPlayerContext = null;
       RoundsEngine.discardArmedUntil = 0;
@@ -861,6 +867,7 @@ class RoundsEngine {
 
   static async saveNewRound() {
     const roundContext = RoundsEngine.roundPlayerContext;
+    const student = roundContext?.student === true;
     const form = document.getElementById('round-entry-form');
     const status = document.getElementById('round-save-status');
     const authenticatedWithoutCoachRole = Boolean(
@@ -869,11 +876,11 @@ class RoundsEngine {
     const currentAccountUserId = window.AuthEngine?.user?.id || null;
     const changedContext = Boolean(
       !roundContext?.playerId
-      || StorageManager.getActivePlayerId() !== roundContext.playerId
+      || (student ? !PlayerPortal.isPlayerAccount() || PlayerPortal.data?.player?.id !== roundContext.playerId : StorageManager.getActivePlayerId() !== roundContext.playerId)
       || currentAccountUserId !== roundContext.accountUserId
       || StorageManager.workspaceOwnerId !== roundContext.workspaceOwnerId
     );
-    if (window.PlayerPortal?.active || authenticatedWithoutCoachRole || changedContext) {
+    if ((!student && (window.PlayerPortal?.active || authenticatedWithoutCoachRole)) || changedContext) {
       RoundsEngine.roundPlayerContext = null;
       App.closeModal();
       App.showToast('No se guardó la ronda porque cambió la cuenta o el golfista seleccionado.');
@@ -975,17 +982,33 @@ class RoundsEngine {
     };
 
     try {
-      await StorageManager.addRound(newRound);
+      if (student) {
+        if (navigator.onLine === false) throw new Error('offline');
+        const { error } = await AuthEngine.client.rpc('submit_player_round', {
+          p_player_id: roundContext.playerId,
+          p_submission_id: roundContext.submissionId,
+          p_round: newRound
+        });
+        if (error) throw error;
+      } else {
+        await StorageManager.addRound(newRound);
+      }
       const playerName = roundContext.playerName;
       RoundsEngine.roundPlayerContext = null;
       App.closeModal();
       App.showSaveConfirmation('Ronda guardada', `El scorecard quedó asociado a la ficha de ${playerName}.`);
+      if (student) {
+        await PlayerPortal.load({ force: true });
+        return;
+      }
       RoundsEngine.renderRoundsView();
       if (window.App && App.renderDashboard) App.renderDashboard();
       if (window.PlayerEngine && App.currentView === 'players') PlayerEngine.renderPlayersView();
     } catch (error) {
       console.error('No se pudo guardar la ronda:', error);
-      GolfForm.setStatus(status, 'No se pudo guardar la ronda. Tus datos siguen en pantalla.', 'error');
+      GolfForm.setStatus(status, navigator.onLine === false
+        ? 'Necesitás conexión para guardar. Conservá esta ventana abierta y reintentá cuando vuelva internet.'
+        : 'No se pudo guardar la ronda. Tus datos siguen en pantalla; podés reintentar.', 'error');
       App.showToast('No se pudo guardar la ronda.');
       GolfForm.setBusy(saveButton, false);
     }

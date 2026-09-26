@@ -82,8 +82,8 @@
 
         const workerResponse = await fetch('../service-worker.js');
         const workerSource = await workerResponse.text();
-        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v27"), 'El service worker publicado usa la versión de caché esperada');
-        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=27'"), 'El caché offline incluye manifiesto y acceso por correo');
+        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v28"), 'El service worker publicado usa la versión de caché esperada');
+        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=28'"), 'El caché offline incluye manifiesto y acceso por correo');
         assert(workerSource.includes('networkFirstNavigation') && workerSource.includes('cacheFirst'), 'La navegación cae al caché y los recursos locales se reutilizan offline');
 
         const originalIsIOS = PWAEngine.isIOS;

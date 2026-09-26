@@ -287,7 +287,7 @@ class PlayerPortal {
         .order('start_date', { ascending: false })
         .limit(20),
       AuthEngine.client.from('rounds')
-        .select('id, played_on, course_name, kind, holes_played, course_par, gross_score, score_to_par, fairways_hit, fairways_total, gir_hit, gir_total, total_putts, penalties')
+        .select('id, played_on, course_name, kind, holes_played, course_par, gross_score, score_to_par, fairways_hit, fairways_total, gir_hit, gir_total, total_putts, penalties, round_holes(hole_number, par, strokes, putts, penalty_strokes)')
         .eq('player_id', playerId)
         .order('played_on', { ascending: false })
         .limit(12),
@@ -451,6 +451,8 @@ class PlayerPortal {
           <div class="card-title-group"><div class="card-icon">📊</div><h3 class="card-title">Resultados y rondas</h3></div>
           <span class="badge badge-blue">${data.rounds.length} registradas</span>
         </div>
+        <button class="btn btn-primary" type="button" onclick="RoundsEngine.openNewRoundModal()">Registrar mi salida</button>
+        <p class="form-help">Cargá una práctica de 9 o 18 hoyos, golpes y estadísticas. Necesitás conexión para guardar.</p>
         <div class="portal-stack">${PlayerPortal.renderRounds(data.rounds)}</div>
       </div>
 
@@ -617,6 +619,9 @@ class PlayerPortal {
             <div><h4>${PlayerPortal.escapeHTML(round.course_name || 'Campo de golf')}</h4><div class="portal-item-meta"><span>📅 ${PlayerPortal.formatDate(round.played_on)}</span><span>${round.holes_played || '—'} hoyos</span><span>FIR ${fir}</span><span>GIR ${gir}</span><span>${round.total_putts ?? '—'} putts</span></div></div>
             <div style="text-align:right;"><div style="font-size:1.45rem; font-weight:800; color:var(--gold-400);">${round.gross_score ?? '—'}</div><span class="badge badge-blue">${PlayerPortal.formatScore(round.score_to_par)}</span></div>
           </div>
+          <details><summary>Ver score por hoyo</summary>
+            <div class="portal-stack">${(round.round_holes || []).slice().sort((a, b) => a.hole_number - b.hole_number).map(h => `<div>Hoyo ${Number(h.hole_number)} · Par ${Number(h.par)} · <strong>${Number(h.strokes)} golpes</strong> · ${h.putts == null ? '—' : Number(h.putts)} putts · ${Number(h.penalty_strokes || 0)} penalidades</div>`).join('') || 'Sin detalle de hoyos.'}</div>
+          </details>
         </div>
       `;
     }).join('');

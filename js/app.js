@@ -402,9 +402,9 @@ class App {
       container.innerHTML = `
         <div class="card card-gold-glow secure-entry-card">
           <span class="badge badge-green">Datos protegidos</span>
-          <h2 style="margin-top:0.75rem;">Ingresá para abrir tu espacio de entrenador</h2>
+          <h2 style="margin-top:0.75rem;">Ingresá a tu espacio de golf</h2>
           <p style="max-width:620px; color:var(--text-muted); line-height:1.6;">
-            Las fichas guardadas en este dispositivo están bloqueadas. Accedé con el correo del entrenador para continuar; después podrás trabajar sin conexión con esta misma sesión.
+            Entrenadores y alumnos ingresan con su correo. Si sos alumno, usá el mismo correo que tu profesor agregó a tu ficha para ver tu plan, registrar tus salidas y consultar tus resultados.
           </p>
           <button class="btn btn-primary" style="margin-top:1rem; min-height:46px;" onclick="AuthEngine.openAccessModal()">Ingresar por correo</button>
         </div>
