@@ -128,6 +128,7 @@ class AuthEngine {
     AuthEngine.user = user || null;
     AuthEngine.profile = profile || null;
     if (AuthEngine.user) AuthEngine.clearPendingOtp();
+    window.CalendarEngine?.onIdentityChanged();
 
     if (AuthEngine.user?.id && AuthEngine.profile?.account_role === 'coach') {
       await StorageManager.unlockWorkspace(AuthEngine.user.id);

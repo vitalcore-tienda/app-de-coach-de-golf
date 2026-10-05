@@ -385,6 +385,7 @@ class PlayerPortal {
           <div style="display:flex; gap:0.45rem; flex-wrap:wrap;">${fromCacheBadge}<span class="badge badge-gold">Mi golf</span></div>
           <h2>Hola, ${PlayerPortal.escapeHTML(player.full_name)}</h2>
           <p>Tu plan, tus resultados y la comunicación con tu entrenador en un solo lugar.</p>
+          <button type="button" class="btn btn-primary" onclick="CalendarEngine.open()">Reservar una clase · Mi agenda</button>
         </div>
         <button class="btn btn-secondary player-portal-refresh" id="player-portal-refresh-btn" ${navigator.onLine === false ? 'disabled' : ''}>↻ Actualizar</button>
       </div>
