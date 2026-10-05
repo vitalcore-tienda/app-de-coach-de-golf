@@ -22,6 +22,13 @@ class AuthEngine {
   static retryPromise = null;
   static identityGeneration = 0;
   static authEventQueue = Promise.resolve();
+  static OTP_PENDING_KEY = 'golfcoach-otp-pending-v1';
+  static OTP_COOLDOWN_KEY = 'golfcoach-otp-cooldown-v1';
+  static otpPending = null;
+  static otpCooldownUntil = 0;
+  static otpBusy = false;
+  static otpView = 0;
+  static otpTimer = null;
 
   static init() {
     if (!AuthEngine.initPromise) {
@@ -68,6 +75,13 @@ class AuthEngine {
         AuthEngine.retryIdentity({ silent: true });
       }
     }, { passive: true });
+    // Returning from the mail app must re-check the existing session, not send mail.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        AuthEngine.updateOtpControls();
+        AuthEngine.retryIdentity({ silent: true });
+      }
+    });
 
     try {
       await AuthEngine.refreshIdentity();
@@ -96,6 +110,10 @@ class AuthEngine {
       await window.CloudSync?.onAuthStateChanged?.();
       await window.PlayerPortal?.onAuthStateChanged?.();
       if (event === 'SIGNED_IN') {
+        if (document.getElementById('global-modal')?.classList.contains('active')
+          && (document.getElementById('auth-otp-form') || document.getElementById('auth-email-form'))) {
+          AuthEngine.renderSignedInModal();
+        }
         AuthEngine.toast('✅ Sesión iniciada.');
       }
     } catch (error) {
@@ -109,6 +127,7 @@ class AuthEngine {
     if (generation !== AuthEngine.identityGeneration) return false;
     AuthEngine.user = user || null;
     AuthEngine.profile = profile || null;
+    if (AuthEngine.user) AuthEngine.clearPendingOtp();
 
     if (AuthEngine.user?.id && AuthEngine.profile?.account_role === 'coach') {
       await StorageManager.unlockWorkspace(AuthEngine.user.id);
@@ -341,6 +360,8 @@ class AuthEngine {
   }
 
   static renderSignInModal() {
+    const pending = AuthEngine.readPendingOtp();
+    if (pending) { AuthEngine.renderOtpModal(); return; }
     AuthEngine.renderModal(`
       <div class="modal-handle-bar"></div>
       <div class="modal-header">
@@ -350,19 +371,120 @@ class AuthEngine {
         </div>
         <button class="modal-close" onclick="App.closeModal()">&times;</button>
       </div>
-      <p style="color:var(--text-muted); line-height:1.55; margin-top:-0.45rem;">Te enviaremos un enlace de un solo uso. No necesitás crear ni recordar una contraseña.</p>
+      <p style="color:var(--text-muted); line-height:1.55; margin-top:-0.45rem;">Te enviaremos un código de un solo uso. Ingresalo acá, dentro de GolfCoach, sin abrir enlaces ni crear una contraseña.</p>
+      <form id="auth-email-form">
       <div class="form-group" style="margin-top:1.2rem;">
         <label class="form-label" for="auth-email-input">Correo electrónico</label>
-        <input class="form-control" id="auth-email-input" type="email" autocomplete="email" inputmode="email" placeholder="nombre@email.com">
+        <input class="form-control" id="auth-email-input" type="email" autocomplete="email" inputmode="email" autocapitalize="none" spellcheck="false" maxlength="254" required placeholder="nombre@email.com">
       </div>
       <div id="auth-status" role="status" aria-live="polite" style="min-height:1.25rem; font-size:0.84rem; color:var(--text-muted);"></div>
-      <button class="btn btn-primary" id="auth-send-link-btn" style="width:100%; min-height:46px; margin-top:1rem;" onclick="AuthEngine.sendMagicLink()">Enviar enlace de acceso</button>
+      <button type="submit" class="btn btn-primary" id="auth-send-code-btn" style="width:100%; min-height:46px; margin-top:1rem;">Enviar código de acceso</button>
+      <button type="button" class="btn btn-secondary" id="auth-have-code-btn" style="width:100%; margin-top:0.75rem;">Ya tengo un código</button>
+      <p id="auth-cooldown" style="color:var(--text-muted); margin-top:0.75rem;"></p>
+      </form>
       <div class="offline-info-card" style="margin-top:1rem;">
         <span>🔐</span><span>El acceso protege tanto la cuenta cloud como las fichas guardadas en este dispositivo. Luego podrás trabajar sin conexión con esta misma sesión.</span>
       </div>
     `);
-
+    document.getElementById('auth-email-form').onsubmit = event => { event.preventDefault(); AuthEngine.sendEmailCode(); };
+    document.getElementById('auth-have-code-btn').onclick = () => {
+      if (AuthEngine.otpBusy) return;
+      const email = document.getElementById('auth-email-input').value.trim().toLowerCase();
+      if (!AuthEngine.isValidEmail(email)) { AuthEngine.setStatus('Ingresá el correo al que llegó el código.', 'error'); return; }
+      AuthEngine.otpPending = { email, at: Date.now() };
+      try { sessionStorage.setItem(AuthEngine.OTP_PENDING_KEY, JSON.stringify(AuthEngine.otpPending)); } catch {}
+      AuthEngine.renderOtpModal('Ingresá el código que ya recibiste. No enviamos otro correo.', 'neutral');
+    };
+    AuthEngine.startOtpTimer();
     window.setTimeout(() => document.getElementById('auth-email-input')?.focus(), 0);
+  }
+
+  static readPendingOtp() {
+    let pending = AuthEngine.otpPending;
+    try { pending = JSON.parse(sessionStorage.getItem(AuthEngine.OTP_PENDING_KEY)) || pending; } catch {}
+    if (!pending || !AuthEngine.isValidEmail(pending.email) || !Number.isFinite(pending.at)
+      || Date.now() - pending.at > 60 * 60 * 1000 || pending.at > Date.now() + 60000) {
+      AuthEngine.clearPendingOtp(); return null;
+    }
+    AuthEngine.otpPending = pending;
+    return pending;
+  }
+
+  static clearPendingOtp() {
+    AuthEngine.otpPending = null;
+    try { sessionStorage.removeItem(AuthEngine.OTP_PENDING_KEY); } catch {}
+    const input = document.getElementById('auth-otp-input');
+    if (input) input.value = '';
+  }
+
+  static setOtpCooldown(seconds = 60) {
+    AuthEngine.otpCooldownUntil = Date.now() + Math.max(60, Math.min(3600, seconds)) * 1000;
+    // Only a timestamp, no address/code/token; shared across tabs on this origin.
+    try { localStorage.setItem(AuthEngine.OTP_COOLDOWN_KEY, String(AuthEngine.otpCooldownUntil)); } catch {}
+  }
+
+  static otpSecondsRemaining() {
+    let until = AuthEngine.otpCooldownUntil;
+    try { until = Math.max(until, Number(localStorage.getItem(AuthEngine.OTP_COOLDOWN_KEY)) || 0); } catch {}
+    return Math.max(0, Math.min(3600, Math.ceil((until - Date.now()) / 1000)));
+  }
+
+  static startOtpTimer() {
+    clearInterval(AuthEngine.otpTimer);
+    AuthEngine.updateOtpControls();
+    AuthEngine.otpTimer = setInterval(() => AuthEngine.updateOtpControls(), 1000);
+  }
+
+  static updateOtpControls() {
+    const seconds = AuthEngine.otpSecondsRemaining();
+    const resend = document.getElementById('auth-resend-code-btn');
+    const send = document.getElementById('auth-send-code-btn');
+    for (const button of [send, resend]) if (button) {
+      button.disabled = AuthEngine.otpBusy || seconds > 0;
+      button.textContent = AuthEngine.otpBusy ? 'Procesando…' : seconds > 0
+        ? `${resend === button ? 'Reenviar' : 'Enviar'} en ${seconds} s`
+        : resend === button ? 'Reenviar código' : 'Enviar código de acceso';
+    }
+    for (const id of ['auth-verify-code-btn','auth-change-email-btn','auth-have-code-btn','auth-email-input','auth-otp-input']) {
+      const element = document.getElementById(id);
+      if (element) element.disabled = AuthEngine.otpBusy;
+    }
+    const text = document.getElementById('auth-cooldown');
+    if (text) text.textContent = seconds > 0 ? 'Esperá antes de pedir otro correo. Si ya llegó uno, podés ingresar su código.' : 'Si no llega, revisá Spam antes de reenviar. El proveedor puede exigir una espera mayor.';
+  }
+
+  static renderOtpModal(message = 'Revisá tu correo y escribí el código acá, sin abrir enlaces.', type = 'success') {
+    const pending = AuthEngine.readPendingOtp();
+    if (!pending) { AuthEngine.renderSignInModal(); return; }
+    AuthEngine.renderModal(`
+      <div class="modal-handle-bar"></div>
+      <div class="modal-header"><div><span class="badge badge-gold">Acceso seguro</span><h3 style="margin-top:0.3rem;">Ingresar código</h3></div><button type="button" class="modal-close" onclick="App.closeModal()">&times;</button></div>
+      <p style="overflow-wrap:anywhere;">Correo: <strong>${AuthEngine.escapeHTML(pending.email)}</strong></p>
+      <p style="color:var(--text-muted); margin:0.75rem 0;">Buscá el código en tu correo y volvé a esta misma ventana de GolfCoach. No lo compartas con nadie.</p>
+      <form id="auth-otp-form">
+        <div class="form-group"><label class="form-label" for="auth-otp-input">Código de acceso</label><input class="form-control" id="auth-otp-input" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" minlength="6" maxlength="10" required spellcheck="false" aria-describedby="auth-otp-help" style="font-size:1.3rem; letter-spacing:0.2em;"></div>
+        <p id="auth-otp-help" style="color:var(--text-muted);">Ingresá todos los números del correo. No es el código de invitación de entrenador.</p>
+        <div id="auth-status" role="status" aria-live="polite" style="min-height:1.25rem; margin-top:0.75rem;"></div>
+        <button type="submit" class="btn btn-primary" id="auth-verify-code-btn" style="width:100%; min-height:46px; margin-top:1rem;">Verificar e ingresar</button>
+      </form>
+      <button type="button" class="btn btn-secondary" id="auth-resend-code-btn" style="width:100%; margin-top:0.75rem;">Reenviar código</button>
+      <p id="auth-cooldown" style="color:var(--text-muted); margin-top:0.75rem;"></p>
+      <button type="button" class="btn btn-secondary" id="auth-change-email-btn" style="width:100%; margin-top:0.75rem;">Usar otro correo</button>
+    `);
+    document.getElementById('auth-otp-form').onsubmit = event => { event.preventDefault(); AuthEngine.verifyEmailCode(); };
+    document.getElementById('auth-resend-code-btn').onclick = () => AuthEngine.sendEmailCode(true);
+    document.getElementById('auth-change-email-btn').onclick = () => {
+      if (AuthEngine.otpBusy) return;
+      AuthEngine.clearPendingOtp(); AuthEngine.renderSignInModal();
+    };
+    // Spaces from copying a code are harmless; do not silently strip arbitrary characters.
+    document.getElementById('auth-otp-input').addEventListener('paste', event => {
+      const value = event.clipboardData?.getData('text').replace(/\s/g, '') || '';
+      if (/^\d{6,10}$/.test(value)) { event.preventDefault(); event.target.value = value; }
+    });
+    AuthEngine.setStatus(message, type);
+    AuthEngine.startOtpTimer();
+    window.setTimeout(() => document.getElementById('auth-otp-input')?.focus(), 0);
   }
 
   static renderSignedInModal() {
@@ -420,49 +542,86 @@ class AuthEngine {
     window.setTimeout(() => document.getElementById('auth-coach-invite-code')?.focus(), 0);
   }
 
-  static async sendMagicLink() {
-    if (!AuthEngine.client) return;
-
-    const input = document.getElementById('auth-email-input');
-    const button = document.getElementById('auth-send-link-btn');
-    const email = input?.value?.trim().toLowerCase() || '';
-
+  static async sendEmailCode(resend = false) {
+    if (!AuthEngine.client || AuthEngine.otpBusy || AuthEngine.user) return;
+    const email = resend ? AuthEngine.readPendingOtp()?.email : document.getElementById('auth-email-input')?.value?.trim().toLowerCase();
     if (!AuthEngine.isValidEmail(email)) {
       AuthEngine.setStatus('Ingresá un correo electrónico válido.', 'error');
-      input?.focus();
       return;
     }
-
+    if (AuthEngine.otpSecondsRemaining()) { AuthEngine.updateOtpControls(); return; }
     if (navigator.onLine === false) {
-      AuthEngine.setStatus('Necesitás conexión para enviar el enlace.', 'error');
+      AuthEngine.setStatus('Necesitás conexión para pedir el código.', 'error');
       return;
     }
-
-    if (button) {
-      button.disabled = true;
-      button.textContent = 'Enviando…';
-    }
-    AuthEngine.setStatus('');
-
+    const view = AuthEngine.otpView;
+    AuthEngine.otpBusy = true;
+    // Start before the request: repeated taps and lost responses must not spam email.
+    AuthEngine.setOtpCooldown();
+    AuthEngine.updateOtpControls();
+    AuthEngine.setStatus('Solicitando código…');
     try {
       const { error } = await AuthEngine.client.auth.signInWithOtp({
         email,
-        options: {
-          shouldCreateUser: true,
-          emailRedirectTo: AuthEngine.redirectUrl
-        }
+        // Redirect remains compatible with previously issued link-based emails.
+        options: { shouldCreateUser: true, emailRedirectTo: AuthEngine.redirectUrl }
       });
       if (error) throw error;
-
-      AuthEngine.setStatus('Revisá tu correo y abrí el enlace desde este dispositivo.', 'success');
+      if (AuthEngine.user) return;
+      AuthEngine.otpPending = { email, at: Date.now() };
+      try { sessionStorage.setItem(AuthEngine.OTP_PENDING_KEY, JSON.stringify(AuthEngine.otpPending)); } catch {}
+      if (view === AuthEngine.otpView) AuthEngine.renderOtpModal();
     } catch (error) {
-      AuthEngine.setStatus(AuthEngine.readableError(error, 'send-link'), 'error');
+      if (AuthEngine.isRateLimit(error)) AuthEngine.setOtpCooldown(AuthEngine.rateLimitSeconds(error));
+      // A lost response may still have sent an email; allow its code to be entered.
+      if (AuthEngine.isNetworkError(error) && !AuthEngine.user) {
+        AuthEngine.otpPending = { email, at: Date.now() };
+        try { sessionStorage.setItem(AuthEngine.OTP_PENDING_KEY, JSON.stringify(AuthEngine.otpPending)); } catch {}
+        if (view === AuthEngine.otpView) AuthEngine.renderOtpModal('No pudimos confirmar el envío. Si recibiste un código, ingresalo acá; si no, esperá antes de reenviar.', 'error');
+      } else if (view === AuthEngine.otpView) AuthEngine.setStatus(AuthEngine.readableError(error, 'send-code'), 'error');
     } finally {
-      if (button) {
-        button.disabled = false;
-        button.textContent = 'Enviar enlace de acceso';
-      }
+      AuthEngine.otpBusy = false;
+      AuthEngine.updateOtpControls();
     }
+  }
+
+  static async verifyEmailCode() {
+    if (!AuthEngine.client || AuthEngine.otpBusy || AuthEngine.user) return;
+    const pending = AuthEngine.readPendingOtp();
+    const input = document.getElementById('auth-otp-input');
+    const token = input?.value?.trim() || '';
+    if (!pending || !/^\d{6,10}$/.test(token)) { AuthEngine.setStatus('Ingresá el código numérico completo del correo.', 'error'); return; }
+    if (navigator.onLine === false) { AuthEngine.setStatus('Necesitás conexión para verificar el código.', 'error'); return; }
+    const view = AuthEngine.otpView;
+    AuthEngine.otpBusy = true; AuthEngine.updateOtpControls(); AuthEngine.setStatus('Verificando acceso…');
+    try {
+      const { data, error } = await AuthEngine.client.auth.verifyOtp({ email: pending.email, token, type: 'email' });
+      if (error) throw error;
+      if (!data?.session) throw new Error('No session returned');
+      AuthEngine.clearPendingOtp();
+      // The SDK persists/refreshes the session under the existing storage key.
+      // Roles still come from profiles/RLS, never from the code or user metadata.
+      await AuthEngine.retryIdentity({ silent: true });
+      if (view === AuthEngine.otpView) {
+        if (AuthEngine.user) AuthEngine.renderSignedInModal();
+        else AuthEngine.setStatus('El código se verificó, pero no pudimos recuperar la sesión. Cerrá esta ventana y volvé a abrir tu cuenta; no solicites otro código todavía.', 'error');
+      }
+    } catch (error) {
+      if (view === AuthEngine.otpView) AuthEngine.setStatus(AuthEngine.readableError(error, 'verify-code'), 'error');
+    } finally {
+      if (input) input.value = '';
+      AuthEngine.otpBusy = false; AuthEngine.updateOtpControls();
+    }
+  }
+
+  static isRateLimit(error) {
+    return error?.status === 429 || ['over_email_send_rate_limit','over_request_rate_limit'].includes(error?.code)
+      || /rate limit|security purposes/i.test(error?.message || '');
+  }
+
+  static rateLimitSeconds(error) {
+    const match = String(error?.message || '').match(/(?:after|in)\s+(\d+)\s+seconds?/i);
+    return Number(error?.retry_after) || Number(match?.[1]) || 60;
   }
 
   static async claimCoachAccess() {
@@ -538,7 +697,15 @@ class AuthEngine {
   static renderModal(content) {
     const modalContent = document.getElementById('global-modal-content');
     if (!modalContent || !window.App) return;
+    clearInterval(AuthEngine.otpTimer);
+    AuthEngine.otpView++;
     modalContent.innerHTML = content;
+    App.setModalCleanup?.(() => {
+      clearInterval(AuthEngine.otpTimer);
+      AuthEngine.otpView++;
+      const input = document.getElementById('auth-otp-input');
+      if (input) input.value = '';
+    });
     App.openModal();
   }
 
@@ -556,17 +723,21 @@ class AuthEngine {
   static readableError(error, context) {
     const message = String(error?.message || '').toLowerCase();
     if (AuthEngine.isNetworkError(error)) return 'No se pudo conectar. Revisá tu conexión e intentá nuevamente.';
-    if (message.includes('rate limit') || message.includes('security purposes')) return 'Esperá unos segundos antes de solicitar otro enlace.';
+    if (AuthEngine.isRateLimit(error)) return 'Se alcanzó el límite de intentos. Esperá antes de reintentar; reenviar varias veces no lo resuelve y la espera del proveedor puede ser mayor que el contador.';
+    if (context === 'verify-code') {
+      if (error?.code === 'otp_expired' || /invalid|expired|venc/i.test(message)) return 'El código no es válido, venció o ya se utilizó. Revisá el correo más reciente y volvé a intentarlo.';
+      return 'No pudimos completar la verificación. Volvé a abrir tu cuenta para comprobar si la sesión se inició antes de solicitar otro correo.';
+    }
     if (message.includes('redirect') || message.includes('not allowed')) return 'Falta habilitar la URL de esta aplicación en la configuración de Auth.';
     if (context === 'claim-coach') {
       if (message.includes('invalid or expired coach invitation') || message.includes('invalid setup code')) return 'El código no es válido para este correo, venció o ya fue utilizado.';
-      if (message.includes('confirmed email')) return 'Primero confirmá tu correo desde el enlace de acceso.';
+      if (message.includes('confirmed email')) return 'Primero verificá tu correo con el código de acceso.';
       if (message.includes('already linked to a golfer')) return 'Esta cuenta ya está vinculada a un perfil de golfista.';
       if (message.includes('already been configured')) return 'El código inicial ya fue utilizado.';
       if (message.includes('not been configured')) return 'El código de activación aún no fue configurado.';
       return 'No se pudo activar la cuenta. Verificá el código e intentá nuevamente.';
     }
-    return 'No se pudo enviar el enlace. Intentá nuevamente en unos minutos.';
+    return 'No se pudo enviar el código. Intentá nuevamente en unos minutos.';
   }
 
   static isNetworkError(error) {
@@ -575,7 +746,7 @@ class AuthEngine {
   }
 
   static isValidEmail(email) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    return typeof email === 'string' && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
   static escapeHTML(value) {
