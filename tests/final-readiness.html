@@ -82,8 +82,8 @@
 
         const workerResponse = await fetch('../service-worker.js');
         const workerSource = await workerResponse.text();
-        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v30"), 'El service worker publicado usa la versión de caché esperada');
-        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=30'"), 'El caché offline incluye manifiesto y acceso por correo');
+        assert(workerResponse.ok && workerSource.includes("golfcoach-pro-shell-v32"), 'El service worker publicado usa la versión de caché esperada');
+        assert(workerSource.includes("'./manifest.json'") && workerSource.includes("'./js/auth.js?v=32'"), 'El caché offline incluye manifiesto y acceso por correo');
         assert(workerSource.includes('networkFirstNavigation') && workerSource.includes('cacheFirst'), 'La navegación cae al caché y los recursos locales se reutilizan offline');
 
         const originalIsIOS = PWAEngine.isIOS;
@@ -119,23 +119,23 @@
         };
         AuthEngine.renderSignInModal();
         document.getElementById('auth-email-input').value = 'correo-invalido';
-        await AuthEngine.sendMagicLink();
+        await AuthEngine.sendEmailCode();
         assert(magicLinkCalls === 0, 'Un correo inválido no genera solicitudes de acceso');
         assert(document.getElementById('auth-status').textContent.includes('válido'), 'El formulario explica el error de correo');
 
         setOnline(false);
         document.getElementById('auth-email-input').value = 'coach@example.test';
-        await AuthEngine.sendMagicLink();
-        assert(magicLinkCalls === 0, 'Sin conexión no se intenta enviar un Magic Link');
+        await AuthEngine.sendEmailCode();
+        assert(magicLinkCalls === 0, 'Sin conexión no se intenta enviar un código');
         assert(document.getElementById('auth-status').textContent.includes('conexión'), 'El acceso informa que necesita conexión');
 
         setOnline(true);
-        await AuthEngine.sendMagicLink();
-        assert(magicLinkCalls === 1, 'Con correo válido y conexión se solicita un Magic Link');
+        await AuthEngine.sendEmailCode();
+        assert(magicLinkCalls === 1, 'Con correo válido y conexión se solicita el correo de acceso');
         assert(magicLinkPayload.email === 'coach@example.test', 'La solicitud normaliza y conserva el correo ingresado');
         assert(magicLinkPayload.options.shouldCreateUser === true, 'El primer acceso puede crear una cuenta pendiente de rol');
-        assert(magicLinkPayload.options.emailRedirectTo === 'https://adanbrilzgolf.com.ar/', 'El Magic Link vuelve exactamente al dominio oficial');
-        assert(document.getElementById('auth-status').textContent.includes('Revisá tu correo'), 'La interfaz confirma que el enlace fue solicitado');
+        assert(magicLinkPayload.options.emailRedirectTo === 'https://adanbrilzgolf.com.ar/', 'Los enlaces de transición conservan el dominio oficial');
+        assert(document.getElementById('auth-status').textContent.includes('Revisá tu correo'), 'La interfaz confirma que el código fue solicitado');
 
         let coachClaimRpc = null;
         const originalRefreshIdentity = AuthEngine.refreshIdentity;
